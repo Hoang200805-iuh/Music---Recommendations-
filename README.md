@@ -83,22 +83,40 @@ Toàn bộ chạy trên dữ liệu MPD thật (787.000 playlist đọc được
 | Co-occurrence | 0,0366 | 0,1770 | 0,2025 | 0,1727 |
 | **Co-occurrence tinh chỉnh** | 0,0366 | **0,2119** | **0,2288** | **0,1845** |
 
-Kết quả của mô hình Hybrid (kèm Hit Rate@10 và R-precision) trên test nằm ở
-`reports/week2_results_hybrid.csv`. Trên val (1.000 playlist mỗi k), so với Co-occurrence tinh chỉnh:
+### Hybrid và các độ đo bổ sung
 
-| k | NDCG@10 | Recall@50 |
-|---|---|---|
-| 0 | 0,042 → **0,168** | 0,025 → **0,102** |
-| 1 | 0,248 → **0,266** | 0,144 → **0,155** |
-| 5 | 0,262 → **0,268** | 0,165 → 0,167 |
-| 25 | 0,218 → 0,221 | 0,151 → 0,151 |
+Lần chạy thứ hai trên test thêm mô hình Hybrid và 2 độ đo Hit Rate@10, R-precision
+(`reports/week2_results_hybrid.csv`, 3.000 playlist mỗi k, là một phần của 10.000 playlist ở trên,
+nên số của 3 mô hình cũ hơi lệch so với bảng trên).
+
+**Hybrid so với Co-occurrence tinh chỉnh** (cùng 3.000 playlist; NDCG@10 có sai số khoảng ± 0,009)
+
+| Độ đo | k = 0 | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|---|
+| NDCG@10 | 0,039 → **0,161** | 0,236 → **0,250** | 0,250 → **0,255** | 0,195 → 0,198 |
+| Recall@10 | 0,006 → **0,032** | 0,048 → **0,051** | 0,054 → 0,056 | 0,046 → 0,046 |
+| Recall@50 | 0,024 → **0,095** | 0,134 → **0,143** | 0,159 → 0,161 | 0,144 → 0,145 |
+| Precision@10 | 0,037 → **0,151** | 0,216 → **0,229** | 0,232 → 0,237 | 0,185 → 0,187 |
+
+**Hit Rate@10** (tỉ lệ playlist có ít nhất 1 bài đúng trong 10 gợi ý) và **R-precision** (chấm R = số bài
+bị giấu gợi ý đầu; trúng bài được 1 điểm, chỉ trúng nghệ sĩ được 0,25, như RecSys Challenge 2018)
+
+| Mô hình | Hit@10 k=0 | k=1 | k=5 | k=25 | R-prec k=0 | k=1 | k=5 | k=25 |
+|---|---|---|---|---|---|---|---|---|
+| Popularity | 0,185 | 0,180 | 0,171 | 0,158 | 0,034 | 0,034 | 0,032 | 0,029 |
+| Co-occurrence | 0,185 | 0,563 | 0,615 | 0,575 | 0,034 | 0,120 | 0,145 | 0,133 |
+| Co-occurrence tinh chỉnh | 0,185 | 0,650 | 0,705 | 0,625 | 0,034 | 0,141 | 0,158 | 0,137 |
+| **Hybrid** | **0,490** | **0,673** | **0,712** | **0,627** | **0,107** | **0,151** | **0,161** | **0,138** |
 
 ### Nhận xét
 
 - Co-occurrence vượt xa Popularity (gấp 5–7 lần ở mọi độ đo) ngay khi có 1 bài seed.
 - Bản tinh chỉnh tốt hơn công thức gốc ở cả 3 mức k có seed (NDCG@10 +20% / +14% / +7%),
   khoảng tin cậy không chồng nhau. Kết quả trên test khớp với val, nên tham số không bị chọn "may".
-- Tên playlist giúp nhiều nhất ở k = 0 (gấp 4 lần), giúp ít khi đã có seed.
+- Tên playlist giúp nhiều nhất ở k = 0: NDCG@10 và Recall@50 tăng khoảng 4 lần, tỉ lệ playlist có ít nhất
+  1 gợi ý đúng tăng từ 18,5% lên 49%. Khi đã có seed thì tên chỉ giúp thêm một chút (rõ nhất ở k = 1),
+  mức tăng nằm trong sai số của từng mô hình nên chưa khẳng định chắc được.
+- Với 10 gợi ý, Co-occurrence tinh chỉnh và Hybrid trúng ít nhất 1 bài ở 65–71% playlist khi có seed.
 - **Recall@10 thấp là bình thường:** playlist test giấu trung bình vài chục bài trong khi chỉ được gợi ý
   10 bài, nên Recall@10 tối đa thường chỉ khoảng 0,1–0,3. Precision@10 khoảng 0,2 nghĩa là trung bình
   2 trong 10 gợi ý trúng đúng bài người dùng đã chọn, giữa 1,7 triệu bài.
@@ -158,8 +176,8 @@ streamlit run dashboard/app.py
 pytest tests/test_evaluation.py tests/test_recommender.py tests/test_app_index.py tests/test_dashboard.py
 ```
 
-Thời gian và RAM trên laptop 16GB: đánh giá 10.000 playlist mỗi k mất khoảng 2,5 giờ, RAM cao nhất 1,9GB;
-tinh chỉnh trên val khoảng 30–70 phút.
+Thời gian và RAM trên laptop 16GB: đánh giá 10.000 playlist mỗi k (3 mô hình) mất khoảng 2,5 giờ,
+3.000 playlist mỗi k (4 mô hình) khoảng 1,5 giờ, RAM cao nhất 2,1GB; tinh chỉnh trên val khoảng 30–70 phút.
 
 ## File kết quả
 
