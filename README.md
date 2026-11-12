@@ -48,21 +48,40 @@ Toàn bộ chạy trên dữ liệu MPD thật (787.000 playlist đọc được
 
 ## Kết quả trên tập test
 
-Recall@10 / Recall@50 / NDCG@10 / Precision@10, 10.000 playlist mỗi k
-(`reports/week2_results_with_tuned.csv`):
+10.000 playlist mỗi k (`reports/week2_results_with_tuned.csv`). Ở k = 0 không có seed nên cả 3 mô hình
+đều gợi ý bài phổ biến và cho cùng kết quả.
 
-| k | Mô hình | Recall@10 | Recall@50 | NDCG@10 | Precision@10 |
-|---|---|---|---|---|---|
-| 0 | Popularity (cả 3 mô hình giống nhau vì không có seed) | 0,0062 | 0,0238 | 0,0384 ± 0,0021 | 0,0366 |
-| 1 | Popularity | 0,0061 | 0,0235 | 0,0375 ± 0,0021 | 0,0357 |
-| 1 | Co-occurrence | 0,0403 | 0,1126 | 0,1924 ± 0,0050 | 0,1770 |
-| 1 | **Co-occurrence tinh chỉnh** | **0,0470** | **0,1316** | **0,2312 ± 0,0052** | **0,2119** |
-| 5 | Popularity | 0,0058 | 0,0231 | 0,0349 ± 0,0020 | 0,0330 |
-| 5 | Co-occurrence | 0,0494 | 0,1439 | 0,2157 ± 0,0052 | 0,2025 |
-| 5 | **Co-occurrence tinh chỉnh** | **0,0537** | **0,1553** | **0,2454 ± 0,0052** | **0,2288** |
-| 25 | Popularity | 0,0061 | 0,0228 | 0,0318 ± 0,0019 | 0,0300 |
-| 25 | Co-occurrence | 0,0460 | 0,1427 | 0,1834 ± 0,0047 | 0,1727 |
-| 25 | **Co-occurrence tinh chỉnh** | **0,0463** | **0,1435** | **0,1967 ± 0,0046** | **0,1845** |
+**NDCG@10** (± nửa khoảng tin cậy 95%)
+
+| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|---|
+| Popularity | 0,0384 ± 0,0021 | 0,0375 ± 0,0021 | 0,0349 ± 0,0020 | 0,0318 ± 0,0019 |
+| Co-occurrence | 0,0384 ± 0,0021 | 0,1924 ± 0,0050 | 0,2157 ± 0,0052 | 0,1834 ± 0,0047 |
+| **Co-occurrence tinh chỉnh** | 0,0384 ± 0,0021 | **0,2312 ± 0,0052** | **0,2454 ± 0,0052** | **0,1967 ± 0,0046** |
+
+**Recall@10**
+
+| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|---|
+| Popularity | 0,0062 | 0,0061 | 0,0058 | 0,0061 |
+| Co-occurrence | 0,0062 | 0,0403 | 0,0494 | 0,0460 |
+| **Co-occurrence tinh chỉnh** | 0,0062 | **0,0470** | **0,0537** | **0,0463** |
+
+**Recall@50**
+
+| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|---|
+| Popularity | 0,0238 | 0,0235 | 0,0231 | 0,0228 |
+| Co-occurrence | 0,0238 | 0,1126 | 0,1439 | 0,1427 |
+| **Co-occurrence tinh chỉnh** | 0,0238 | **0,1316** | **0,1553** | **0,1435** |
+
+**Precision@10**
+
+| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|---|
+| Popularity | 0,0366 | 0,0357 | 0,0330 | 0,0300 |
+| Co-occurrence | 0,0366 | 0,1770 | 0,2025 | 0,1727 |
+| **Co-occurrence tinh chỉnh** | 0,0366 | **0,2119** | **0,2288** | **0,1845** |
 
 Kết quả của mô hình Hybrid (kèm Hit Rate@10 và R-precision) trên test nằm ở
 `reports/week2_results_hybrid.csv`. Trên val (1.000 playlist mỗi k), so với Co-occurrence tinh chỉnh:
