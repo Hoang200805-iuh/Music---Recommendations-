@@ -42,20 +42,29 @@ def n_to_recommend(hidden):
     return max(EVAL_N, len(hidden or ()))
 
 
-def recommendation_panel(title, subtitle, items, values, data, hidden):
-    """items: n_to_recommend(hidden) bài gợi ý, chỉ hiện TOP_N bài đầu.
-
-    values[i] là số hiển thị của bài i; số 0 nghĩa là bài được bù từ danh sách phổ biến.
-    """
-    top = max((values[i] for i in items[:TOP_N]), default=0)
-    rows = []
-    for rank, item in enumerate(items[:TOP_N], 1):
+def score_labels(items, values):
+    """Nhãn và độ dài thanh điểm của từng bài: values[i] là số hiển thị của bài i;
+    số 0 nghĩa là bài được bù từ danh sách phổ biến."""
+    top = max((values[i] for i in items), default=0)
+    labels = {}
+    for item in items:
         value = values[item]
         if value > 0:
-            label = f"{value:,}" if isinstance(value, (int, np.integer)) else f"{value:.3f}"
-            fill = value / top
+            labels[item] = (f"{value:,}" if isinstance(value, (int, np.integer)) else f"{value:.3f}", value / top)
         else:
-            label, fill = "bù phổ biến", None
+            labels[item] = ("bù phổ biến", None)
+    return labels
+
+
+def recommendation_panel(title, subtitle, items, values, data, hidden, labels=None):
+    """items: n_to_recommend(hidden) bài gợi ý, chỉ hiện TOP_N bài đầu.
+
+    values: số hiển thị của từng bài (xem score_labels); labels: {bài: (nhãn, thanh điểm)} để thay values.
+    """
+    labels = labels or score_labels(items[:TOP_N], values)
+    rows = []
+    for rank, item in enumerate(items[:TOP_N], 1):
+        label, fill = labels[item]
         rows.append(track_row_html(data.names[item], rank, label, fill, bool(hidden) and item in hidden))
 
     stats = ()
@@ -98,27 +107,68 @@ def hybrid_panel(seed, title, data, hidden):
     return recommendation_panel("Hybrid (bài + tên playlist)", subtitle, items, scores, data, hidden)
 
 
+def rerank_panel(seed, title, data, hidden):
+    model = data.rerank
+    candidates, scores = model.score(seed, title)
+    items = model.recommend(seed, n_to_recommend(hidden), title=title, scored=(candidates, scores))
+    if scores is None:
+        subtitle = "Chưa có bài seed nên giữ nguyên thứ tự của Hybrid + User-User (xếp lại không giúp ích ở k = 0)"
+    else:
+        subtitle = (f"Hybrid + User-User chọn {len(candidates)} ứng viên, LightGBM xếp lại theo 22 đặc trưng"
+                    " · nhãn: thứ hạng ở mô hình gốc")
+    base_rank = {int(item): rank for rank, item in enumerate(candidates, 1)}
+    labels = {}
+    for rank, item in enumerate(items[:TOP_N], 1):
+        before = base_rank.get(item)
+        if before is None:
+            labels[item] = ("bù phổ biến", None)
+        elif before > rank:
+            labels[item] = (f"↑ từ #{before}", None)
+        elif before < rank:
+            labels[item] = (f"↓ từ #{before}", None)
+        else:
+            labels[item] = (f"= #{before}", None)
+    return recommendation_panel("Hybrid + LightGBM xếp hạng lại", subtitle, items, None, data, hidden, labels)
+
+
+RERANK_NOTE = """
+1. **Chọn ứng viên:** Hybrid (Co-occurrence tinh chỉnh + tên playlist) cộng thêm User-User kNN
+   (100 playlist giống nhất) chọn ra 300 bài.
+2. **Xếp hạng lại:** LightGBM (LambdaRank, 657 cây) chấm lại 300 bài dựa trên điểm của từng mô hình con,
+   số bài seed cùng nghệ sĩ, độ phổ biến của bài so với các bài seed, độ đa dạng nghệ sĩ của playlist…
+
+Huấn luyện trên tập validation; trên 2000 playlist test, NDCG@10 tăng 3–12% và Recall@50 tăng 4–9%
+so với mô hình gốc ở k ≥ 1 (k = 0 giữ nguyên).
+
+Nhãn **↑ từ #14** nghĩa là bài đứng thứ 14 ở mô hình gốc đã được LightGBM kéo lên.
+"""
+
+
 def show_recommendations(seed, data, hidden=None, title=None):
+    # Popularity không hiện thành ô riêng (kết quả thấp), chỉ còn dùng để bù bài khi các mô hình thiếu ứng viên
     top_left, top_right = st.columns(2)
     with top_left:
-        st.html(recommendation_panel(
-            "Popularity", "Bài phổ biến nhất · số lượt đếm bằng MapReduce",
-            data.popularity.recommend(seed, n_to_recommend(hidden)), data.counts, data, hidden,
-        ))
-    with top_right:
         st.html(cooccurrence_panel(
             "Co-occurrence", "Bài hay nằm chung playlist · điểm cosine", data.cooccurrence, seed, data, hidden,
         ))
-    bottom_left, bottom_right = st.columns(2)
-    with bottom_left:
+    with top_right:
         params = app_index.TUNED_PARAMS
         st.html(cooccurrence_panel(
             "Co-occurrence tinh chỉnh",
             f"Phạt bài phổ biến nhẹ hơn (mũ {params['item_exponent']}) · bỏ bài có dưới {params['min_count']} playlist",
             data.cooccurrence_tuned, seed, data, hidden,
         ))
-    with bottom_right:
+    bottom_left, bottom_right = st.columns(2)
+    with bottom_left:
         st.html(hybrid_panel(seed, title, data, hidden))
+    with bottom_right:
+        if data.rerank is None:
+            st.info("Chưa có mô hình LightGBM: cài lightgbm và chép reranker_lgbm.txt (đầu ra của "
+                    "recommender.rerank.train_reranker) vào thư mục chỉ mục, rồi khởi động lại app.")
+        else:
+            st.html(rerank_panel(seed, title, data, hidden))
+    with st.expander("Mô hình Hybrid + LightGBM hoạt động thế nào?"):
+        st.markdown(RERANK_NOTE)
 
 
 def add_seed(item):
@@ -129,7 +179,7 @@ def add_seed(item):
 def manual_tab(data):
     st.session_state.setdefault("seeds", [])
 
-    title = st.text_input("Tên playlist (không bắt buộc, chỉ mô hình Hybrid dùng)",
+    title = st.text_input("Tên playlist (không bắt buộc, chỉ Hybrid và LightGBM dùng)",
                           placeholder="Ví dụ: workout, chill, christmas, country")
     query = st.text_input("Tìm bài hát hoặc nghệ sĩ", placeholder="Ví dụ: Wonderwall, Frank Sinatra, One Dance")
     matches = data.names.search(query, MAX_SEARCH_RESULTS)
@@ -153,7 +203,7 @@ def manual_tab(data):
 
     st.html(f'<div class="section-label">Playlist của bạn ({len(st.session_state.seeds)} bài)</div>')
     if not st.session_state.seeds:
-        st.info("Playlist đang trống nên ba mô hình đầu chỉ gợi ý bài phổ biến; Hybrid vẫn gợi ý được nếu có "
+        st.info("Playlist đang trống nên hai mô hình Co-occurrence chỉ gợi ý bài phổ biến; Hybrid và LightGBM vẫn gợi ý được nếu có "
                 "tên playlist. Hãy thêm vài bài bạn thích.")
     for item in list(st.session_state.seeds):
         row_col, remove_col = st.columns([8, 1], vertical_alignment="center")
@@ -213,7 +263,7 @@ data = load_app_data()
 st.html(hero_html(
     "Hôm nay nghe gì",
     "Gợi ý nhạc theo gu của bạn",
-    f"So sánh 4 mô hình trên toàn bộ tập train: {data.meta['n_train_playlists']:,} playlist "
+    f"So sánh {3 if data.rerank is None else 4} mô hình trên toàn bộ tập train: {data.meta['n_train_playlists']:,} playlist "
     f"và {data.meta['n_items']:,} bài. Tab playlist có thật dùng {len(data.test_playlists)} playlist "
     "ngẫu nhiên trong tập test.",
 ))

@@ -17,6 +17,9 @@ Toàn bộ chạy trên dữ liệu MPD thật (787.000 playlist đọc được
 | Mô hình 2: Co-occurrence (cosine) | Xong | `recommender/cooccurrence/cooccurrence_recommender.py` |
 | Tinh chỉnh Co-occurrence trên val | Xong | `recommender/evaluation/tune_cooccurrence.py` |
 | Mô hình Hybrid: Co-occurrence + tên playlist | Xong | `recommender/hybrid/` |
+| Thử RP3beta (bước đi ngẫu nhiên) | Xong, không tốt hơn | `recommender/evaluation/tune_rp3beta.py` |
+| User-User kNN, trộn vào Hybrid | Xong | `recommender/neighbors/`, `recommender/evaluation/tune_blend.py` |
+| Mô hình hai giai đoạn: Hybrid chọn ứng viên, LightGBM xếp hạng lại | Xong | `recommender/rerank/` |
 | Đánh giá trên test | Xong | `recommender/evaluation/evaluate_models.py` |
 | Giao diện thử mô hình (Streamlit, 100% dữ liệu) | Xong | `dashboard/`, `recommender/app_index.py` |
 
@@ -45,6 +48,18 @@ Toàn bộ chạy trên dữ liệu MPD thật (787.000 playlist đọc được
 4. **Hybrid:** cộng điểm Co-occurrence tinh chỉnh với điểm theo **tên playlist**
    (bài hay có trong các playlist train cùng tên, tên đã chuẩn hóa), mỗi loại đưa về thang 0–1,
    trọng số tên **0,1** (chọn trên val). Đây là mô hình duy nhất làm tốt ở k = 0.
+5. **RP3beta** (thử, không giữ): Co-occurrence chia thêm cho độ dài playlist, tương đương bước đi ngẫu nhiên
+   bài → playlist → bài. Thử 30 bộ tham số trên val, bộ tốt nhất chỉ hơn Co-occurrence tinh chỉnh
+   0,0006 NDCG@10 (nằm trong sai số), nên không đánh giá trên test.
+6. **User-User kNN:** tìm 100 playlist train giống seed nhất (độ giống `|seed ∩ p| / sqrt(|p|)`) rồi gợi ý
+   bài trong đó. Chạy riêng thì ngang Co-occurrence; trộn vào Hybrid với trọng số 0,5 (chọn trên val
+   trong 30 bộ) tăng nhẹ Recall@50, rõ nhất ở k = 25.
+7. **Hybrid + LightGBM xếp hạng lại (mô hình hai giai đoạn):** Hybrid + User-User chọn 300 bài ứng viên,
+   rồi LightGBM (LambdaRank) xếp lại theo 22 đặc trưng: điểm và thứ hạng của từng mô hình con, điểm
+   Co-occurrence chỉ từ 5 bài seed cuối, số bài seed cùng nghệ sĩ, độ phổ biến của bài so với các bài seed,
+   độ đa dạng nghệ sĩ của playlist… Huấn luyện trên val (6.000 playlist mỗi k, 20% giữ lại để dừng sớm,
+   được 657 cây). Ở k = 0 giữ nguyên thứ tự gốc vì xếp lại không giúp gì. Cách làm theo đội vô địch
+   RecSys Challenge 2018.
 
 ## Kết quả trên tập test
 
@@ -108,6 +123,29 @@ bị giấu gợi ý đầu; trúng bài được 1 điểm, chỉ trúng nghệ
 | Co-occurrence tinh chỉnh | 0,185 | 0,650 | 0,705 | 0,625 | 0,034 | 0,141 | 0,158 | 0,137 |
 | **Hybrid** | **0,490** | **0,673** | **0,712** | **0,627** | **0,107** | **0,151** | **0,161** | **0,138** |
 
+### Mô hình hai giai đoạn: Hybrid + User-User + LightGBM
+
+`reports/week2_results_rerank.csv`: 2.000 playlist test mỗi k, so sánh **từng cặp playlist** giữa mô hình
+gốc (Hybrid + User-User, chưa xếp lại) và sau khi LightGBM xếp lại. Số trong ngoặc là mức tăng tương đối.
+
+| Độ đo | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|
+| NDCG@10 | 0,245 → **0,258** (+5%) | 0,250 → **0,259** (+3%) | 0,195 → **0,219** (+12%) |
+| Recall@10 | 0,050 → **0,052** (+5%) | 0,055 → **0,058** (+5%) | 0,046 → **0,054** (+18%) |
+| Recall@50 | 0,142 → **0,149** (+5%) | 0,162 → **0,169** (+4%) | 0,149 → **0,162** (+9%) |
+| R-precision | 0,149 → **0,157** (+5%) | 0,160 → **0,166** (+4%) | 0,138 → **0,149** (+8%) |
+| Hit@10 | 0,678 → **0,711** | 0,705 → **0,722** | 0,618 → **0,661** |
+
+- Mọi mức tăng đều lớn hơn khoảng tin cậy 95% của chênh lệch vài lần (ví dụ NDCG@10 ở k = 25:
+  +0,024 ± 0,005), nên đây là cải thiện thật chứ không phải do may.
+- k = 0: giữ nguyên mô hình gốc (NDCG@10 0,158). Thử xếp lại ở k = 0 làm kết quả kém đi một chút.
+- Đặc trưng quan trọng nhất (`reports/week2_rerank_feature_importance.csv`): thứ hạng và điểm của mô hình
+  gốc (65%), tỉ lệ playlist cùng tên chứa bài (5%), thứ hạng User-User (4%), điểm Co-occurrence từ 5 bài seed
+  cuối (4%), thứ hạng Co-occurrence (3,5%).
+- Dữ liệu huấn luyện quan trọng: lần đầu chỉ dùng 1.500 playlist val mỗi k, mô hình dừng ở 23 cây và
+  chỉ tăng NDCG@10 1–5%; tăng lên 6.000 playlist mỗi k (và cây nhỏ hơn, học chậm hơn) cho kết quả trên.
+- Hạn chế: LightGBM chỉ xếp lại 300 ứng viên, bài đúng không lọt vào đó thì vẫn không gợi ý được.
+
 ### Nhận xét
 
 - Co-occurrence vượt xa Popularity (gấp 5–7 lần ở mọi độ đo) ngay khi có 1 bài seed.
@@ -123,6 +161,10 @@ bị giấu gợi ý đầu; trúng bài được 1 điểm, chỉ trúng nghệ
 - Biết trước nhiều bài hơn không làm điểm tăng mãi: điểm cao nhất ở k = 5, giảm ở k = 25
   (đáp án ít đi và các bài cuối playlist khác gu hơn).
 - Thử "tin playlist chứa nhiều bài seed hơn" (`playlist_exponent`) không cải thiện, nên giữ mức 1.
+- Các biến thể của cùng một ý tưởng "đếm đồng xuất hiện" (RP3beta, User-User kNN) đều cho kết quả ngang
+  nhau: mô hình loại này đã gần chạm trần. Muốn tăng rõ phải thêm loại thông tin mới (nghệ sĩ, độ phổ biến,
+  thứ tự bài) và học cách kết hợp, như mô hình hai giai đoạn: NDCG@10 ở k = 1 tăng từ 0,231
+  (Co-occurrence tinh chỉnh) lên 0,258, khoảng +12% (hai lần chấm dùng mẫu playlist khác nhau nên chỉ so gần đúng).
 
 ### Lưu ý về dữ liệu
 
@@ -133,10 +175,13 @@ bị giấu gợi ý đầu; trúng bài được 1 điểm, chỉ trúng nghệ
 
 ## Giao diện thử mô hình
 
-App Streamlit so sánh 4 mô hình trên **toàn bộ** tập train. Dữ liệu được dựng một lần thành các
-file nhị phân rồi đọc bằng memory-map, nên app chỉ dùng khoảng 650MB RAM.
+App Streamlit so sánh 4 mô hình trên **toàn bộ** tập train: Co-occurrence, Co-occurrence tinh chỉnh,
+Hybrid và Hybrid + LightGBM (Popularity không hiện thành ô riêng vì kết quả thấp, chỉ dùng để bù bài
+khi thiếu ứng viên). Dữ liệu được dựng một lần thành các file nhị phân rồi đọc bằng memory-map, nên app
+chỉ dùng khoảng 650MB RAM; mỗi lần gợi ý của LightGBM mất khoảng 0,3 giây.
 
 - Tab **Tự chọn bài:** tìm bài, thêm vào playlist, nhập tên playlist, xem 4 mô hình gợi ý.
+- Ô LightGBM ghi thứ hạng của mỗi bài ở mô hình gốc ("↑ từ #14": bài thứ 14 được kéo lên).
 - Tab **Thử trên playlist có thật:** giấu một playlist test, chọn k (0, 1, 5, 25; thêm 50, 100 để thử),
   xem từng mô hình đoán trúng bao nhiêu bài (đánh dấu ✓) cùng NDCG@10, Precision@10, Recall@50, R-precision.
 
@@ -167,9 +212,22 @@ python -m recommender.evaluation.tune_hybrid $COMMON --titles hdfs_sim/music/pro
 python -m recommender.evaluation.evaluate_models $COMMON --titles hdfs_sim/music/processed/playlist_titles.tsv \
     --out reports/week2_results_hybrid.csv --tuned 0.5 0.25 10 --hybrid 1.0 0.1
 
-# 5. Dựng chỉ mục cho app (một lần, khoảng 2–3 phút) rồi mở app
+# 5. (Thử thêm, chọn trên val) RP3beta và trộn User-User kNN
+python -m recommender.evaluation.tune_rp3beta $COMMON --out reports/week2_tuning_rp3beta_val.csv
+python -m recommender.evaluation.tune_blend $COMMON --titles hdfs_sim/music/processed/playlist_titles.tsv \
+    --out reports/week2_tuning_blend_val.csv
+
+# 6. Mô hình hai giai đoạn: tạo đặc trưng (khoảng 2 giờ), huấn luyện LightGBM và chấm trên test (vài phút)
+python -m recommender.rerank.build_features $COMMON --titles hdfs_sim/music/processed/playlist_titles.tsv \
+    --out-dir hdfs_sim/music/analytics/rerank_features
+python -m recommender.rerank.train_reranker --features-dir hdfs_sim/music/analytics/rerank_features \
+    --out reports/week2_results_rerank.csv --importance-out reports/week2_rerank_feature_importance.csv \
+    --model-out hdfs_sim/music/analytics/rerank_features/reranker_lgbm.txt
+
+# 7. Dựng chỉ mục cho app (một lần, khoảng 2–3 phút), chép mô hình LightGBM vào rồi mở app
 python -m recommender.app_index $COMMON --titles hdfs_sim/music/processed/playlist_titles.tsv \
     --out hdfs_sim/music/analytics/app_index
+cp hdfs_sim/music/analytics/rerank_features/reranker_lgbm.txt hdfs_sim/music/analytics/app_index/
 streamlit run dashboard/app.py
 
 # Test
@@ -177,7 +235,8 @@ pytest tests/test_evaluation.py tests/test_recommender.py tests/test_app_index.p
 ```
 
 Thời gian và RAM trên laptop 16GB: đánh giá 10.000 playlist mỗi k (3 mô hình) mất khoảng 2,5 giờ,
-3.000 playlist mỗi k (4 mô hình) khoảng 1,5 giờ, RAM cao nhất 2,1GB; tinh chỉnh trên val khoảng 30–70 phút.
+3.000 playlist mỗi k (4 mô hình) khoảng 1,5 giờ, RAM cao nhất 2,1GB; tinh chỉnh trên val khoảng 30–70 phút
+(trộn User-User khoảng 1,5 giờ). Tạo đặc trưng cho LightGBM dùng khoảng 1,6GB RAM, huấn luyện khoảng 1,1GB.
 
 ## File kết quả
 
@@ -188,6 +247,10 @@ Thời gian và RAM trên laptop 16GB: đánh giá 10.000 playlist mỗi k (3 m�
 | `reports/week2_results_hybrid.csv` | Cả 4 mô hình, thêm Hit Rate@10 và R-precision |
 | `reports/week2_tuning_val.csv` | 45 bộ tham số Co-occurrence trên val |
 | `reports/week2_tuning_hybrid_val.csv` | 20 bộ tham số Hybrid trên val |
+| `reports/week2_tuning_rp3beta_val.csv` | 30 bộ tham số RP3beta trên val |
+| `reports/week2_tuning_blend_val.csv` | 30 cách trộn User-User kNN vào Hybrid trên val |
+| `reports/week2_results_rerank.csv` | Hybrid + User-User trước và sau khi LightGBM xếp lại, trên test, kèm chênh lệch từng cặp |
+| `reports/week2_rerank_feature_importance.csv` | Độ quan trọng (gain) của 22 đặc trưng LightGBM |
 | `reports/eda_charts/` | Biểu đồ EDA (`src/eda_charts.py`) |
 
 ---

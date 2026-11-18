@@ -6,7 +6,8 @@ import pytest
 from scipy import sparse
 
 from recommender.cooccurrence.cooccurrence_recommender import CooccurrenceRecommender
-from recommender.hybrid.hybrid_recommender import HybridRecommender, TitleRecommender
+from recommender.hybrid.hybrid_recommender import HybridRecommender, TitleRecommender, combine
+from recommender.neighbors.user_knn_recommender import UserKNNRecommender
 from recommender.hybrid.playlist_titles import normalize_title
 from recommender.popularity.popularity_recommender import PopularityRecommender
 
@@ -184,3 +185,117 @@ def test_hybrid_with_precomputed_scores_matches():
     _, hybrid = _title_models(0.5)
     scores = hybrid.score([3], "rock")
     assert hybrid.recommend([3], 4, title="rock", scores=scores) == hybrid.recommend([3], 4, title="rock")
+
+
+def _brute_force_rp3beta(seed, j, alpha, beta):
+    """Bước đi ngẫu nhiên bài -> playlist -> bài: P(i -> p) = 1/count(i), P(p -> j) = 1/|p|, mỗi bước mũ alpha."""
+    count = lambda i: sum(1 for p in PLAYLISTS if i in p)
+    total = sum((1 / count(i)) ** alpha * (1 / len(p)) ** alpha
+                for i in seed for p in PLAYLISTS if i in p and j in p)
+    return total / count(j) ** beta if count(j) else 0.0
+
+
+@pytest.mark.parametrize("alpha,beta", [(1.0, 0.5), (0.7, 0.25)])
+def test_length_exponent_gives_rp3beta(alpha, beta):
+    base = _model()
+    model = CooccurrenceRecommender(base.row_indptr, base.row_indices, base.col_indptr, base.col_indices,
+                                    base.fallback, seed_exponent=alpha, item_exponent=beta, length_exponent=alpha)
+    scores = model.score([0, 3])
+    for j in range(7):
+        assert scores[j] == pytest.approx(_brute_force_rp3beta([0, 3], j, alpha, beta))
+
+
+def _brute_force_user_knn(seed, j, n_neighbors, length_exp, similarity_exp):
+    sims = [(len(set(seed) & set(p)) / len(p) ** length_exp, p) for p in PLAYLISTS if set(seed) & set(p)]
+    sims.sort(key=lambda x: -x[0])
+    return sum(sim ** similarity_exp for sim, p in sims[:n_neighbors] if j in p)
+
+
+@pytest.mark.parametrize("n_neighbors,similarity_exp", [(10, 1.0), (2, 2.0)])
+def test_user_knn_matches_formula(n_neighbors, similarity_exp):
+    model = UserKNNRecommender(_model(), n_neighbors=n_neighbors, similarity_exponent=similarity_exp)
+    # Seed [0, 2]: độ giống của các playlist khác nhau nên top-2 không bị hòa
+    scores = model.score([0, 2])
+    for j in range(7):
+        assert scores[j] == pytest.approx(_brute_force_user_knn([0, 2], j, n_neighbors, 0.5, similarity_exp))
+
+
+def test_user_knn_without_seed_falls_back_to_popularity():
+    model = UserKNNRecommender(_model())
+    assert model.recommend([], 3) == model.fallback.recommend([], 3)
+    assert model.recommend([0], 3, model.score([0])) == model.recommend([0], 3)
+
+
+def test_hybrid_adds_neighbor_scores_on_the_same_scale():
+    base = _model()
+    titles, _ = _title_models(0.0)
+    neighbors = UserKNNRecommender(base)
+    hybrid = HybridRecommender(base, titles, 0.0, neighbors, neighbor_weight=1.0)
+    c, u = base.score([0]), neighbors.score([0])
+    assert np.allclose(hybrid.score([0]), c / c.max() + u / u.max())
+
+
+def test_combine_handles_integer_scores_from_unseen_seeds():
+    titles, _ = _title_models(0.1)
+    neighbors = UserKNNRecommender(_model())
+    # Bài -1 không có trong train: User-User không có láng giềng nào
+    scores = combine(neighbors.score([-1]), titles.scores("rock"), 0.1)
+    assert scores.dtype == np.float64 and scores.max() == pytest.approx(0.1)
+
+
+def _feature_builder(n_candidates=6):
+    from recommender.rerank.features import FeatureBuilder
+
+    base = _model()
+    titles, _ = _title_models(0.1)
+    neighbors = UserKNNRecommender(base, n_neighbors=3)
+    # Nghệ sĩ của 7 bài; bài seed -1 không có trong train, thuộc nghệ sĩ 1
+    builder = FeatureBuilder(base, titles, neighbors, [0, 0, 1, 1, 2, 3, 3], 0.1, 0.5,
+                             unseen_artists={-1: 1}, n_candidates=n_candidates)
+    return builder, HybridRecommender(base, titles, 0.1, neighbors, neighbor_weight=0.5)
+
+
+def test_rerank_candidates_follow_hybrid_order():
+    from recommender.rerank.features import FEATURE_NAMES
+
+    builder, hybrid = _feature_builder()
+    for seed, title in (([0], "rock"), ([2, 3, -1], None), ([], "chill"), ([], None)):
+        candidates, features = builder.build(seed, title)
+        assert list(candidates) == hybrid.recommend(seed, 6, title=title)
+        assert features.shape == (len(candidates), len(FEATURE_NAMES)) and np.isfinite(features).all()
+
+
+def test_rerank_features_match_brute_force():
+    from recommender.rerank.features import FEATURE_NAMES
+
+    builder, _ = _feature_builder()
+    seed = [2, 3, -1]
+    candidates, features = builder.build(seed, None)
+    column = {name: features[:, i] for i, name in enumerate(FEATURE_NAMES)}
+    neighbor_playlists, _ = builder.neighbors.neighbors(seed)
+    artists = [0, 0, 1, 1, 2, 3, 3]
+    for row, j in enumerate(candidates):
+        hits = sum(1 for p in neighbor_playlists if j in PLAYLISTS[p])
+        assert column["knn_neighbor_share"][row] == pytest.approx(hits / len(neighbor_playlists))
+        # Seed 2, 3 (nghệ sĩ 1) và -1 (nghệ sĩ 1)
+        assert column["artist_seed_count"][row] == (3 if artists[j] == 1 else 0)
+    assert column["n_seed"][0] == 3 and column["n_known_seed"][0] == 2
+    assert column["seed_artist_diversity"][0] == pytest.approx(1 / 3)
+
+
+def test_rerank_recommender_orders_by_booster_and_fills():
+    from recommender.rerank.lgbm_reranker import RerankRecommender
+
+    class ReverseBooster:  # điểm tăng theo thứ hạng gốc: đảo ngược danh sách
+        def predict(self, features):
+            return np.arange(len(features), dtype=float)
+
+    builder, hybrid = _feature_builder(n_candidates=4)
+    model = RerankRecommender(builder, ReverseBooster())
+    assert model.recommend([0], 4, title="rock") == hybrid.recommend([0], 4, title="rock")[::-1]
+    # Bù bằng bài phổ biến khi thiếu ứng viên: cả 5 bài khác seed trong dữ liệu nhỏ
+    assert sorted(model.recommend([0], 5, title="rock")) == [1, 2, 3, 4, 5]
+    # Không có bài seed: giữ thứ tự của mô hình gốc
+    assert model.recommend([], 4, title="chill") == hybrid.recommend([], 4, title="chill")
+    assert model.score([], "chill")[1] is None
+    assert model.recommend([0], 4, "rock", scored=model.score([0], "rock")) == model.recommend([0], 4, "rock")

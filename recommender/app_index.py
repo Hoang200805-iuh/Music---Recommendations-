@@ -17,6 +17,8 @@ Các file trong thư mục chỉ mục:
     test_offsets/test_items.npy mẫu playlist test (id âm = bài không có trong train)
     test_meta.json              pid, tên của mẫu test, danh sách tên playlist, tên và nghệ sĩ
                                 của các bài không có trong train
+    reranker_lgbm.txt           (không bắt buộc) mô hình LightGBM từ recommender.rerank.train_reranker,
+                                chép vào đây để app có thêm mô hình xếp hạng lại
 
 Cách dựng (chạy từ thư mục gốc repo):
     python -m recommender.app_index --flat <flat.tsv> --split-file <playlist_split.tsv> \
@@ -37,6 +39,7 @@ from recommender.cooccurrence.cooccurrence_recommender import CooccurrenceRecomm
 from recommender.evaluation.split_playlists import read_assignment
 from recommender.hybrid.hybrid_recommender import HybridRecommender, TitleRecommender
 from recommender.hybrid.playlist_titles import read_titles
+from recommender.neighbors.user_knn_recommender import UserKNNRecommender
 from recommender.popularity.popularity_recommender import PopularityRecommender, read_mapreduce_counts
 
 N_TEST_PLAYLISTS = 500
@@ -219,6 +222,8 @@ def load(index_dir):
                               {title: i for i, title in enumerate(meta["titles"])}, meta["n_items"])
     hybrid_cooccurrence = CooccurrenceRecommender(
         *arrays, popularity, playlist_exponent=HYBRID_PARAMS["playlist_exponent"], **TUNED_PARAMS)
+    artists = np.load(index_dir / "artists.npy")
+    unseen_artists = {int(k): v for k, v in meta["unseen_artists"].items()}
     return {
         "meta": meta,
         "counts": np.load(index_dir / "counts.npy"),
@@ -227,14 +232,35 @@ def load(index_dir):
         "cooccurrence": CooccurrenceRecommender(*arrays, popularity),
         "cooccurrence_tuned": CooccurrenceRecommender(*arrays, popularity, **TUNED_PARAMS),
         "hybrid": HybridRecommender(hybrid_cooccurrence, titles, HYBRID_PARAMS["title_weight"]),
-        "artists": np.load(index_dir / "artists.npy"),
+        "rerank": load_reranker(index_dir, hybrid_cooccurrence, titles, artists, unseen_artists),
+        "artists": artists,
         "test_titles": {int(pid): title for pid, title in meta["test_titles"].items()},
         "test_playlists": {
             pid: test_items[test_offsets[i]: test_offsets[i + 1]] for i, pid in enumerate(meta["test_pids"])
         },
         "unseen_names": {int(k): v for k, v in meta["unseen_names"].items()},
-        "unseen_artists": {int(k): v for k, v in meta["unseen_artists"].items()},
+        "unseen_artists": unseen_artists,
     }
+
+
+def load_reranker(index_dir, cooccurrence, titles, artists, unseen_artists):
+    """Mô hình xếp hạng lại nếu có reranker_lgbm.txt và đã cài lightgbm, ngược lại None."""
+    model_path = Path(index_dir) / "reranker_lgbm.txt"
+    try:
+        import lightgbm  # noqa: F401
+    except ImportError:
+        return None
+    if not model_path.exists():
+        return None
+    # Cùng cấu hình với lúc tạo đặc trưng huấn luyện (recommender.rerank.build_features)
+    from recommender.rerank import build_features
+    from recommender.rerank.features import FeatureBuilder
+    from recommender.rerank.lgbm_reranker import RerankRecommender
+
+    neighbors = UserKNNRecommender(cooccurrence, **build_features.NEIGHBORS)
+    builder = FeatureBuilder(cooccurrence, titles, neighbors, artists, build_features.TITLE_WEIGHT,
+                             build_features.NEIGHBOR_WEIGHT, unseen_artists=unseen_artists)
+    return RerankRecommender.from_file(builder, model_path)
 
 
 def main():

@@ -5,9 +5,10 @@ Tên playlist cho biết khá nhiều về gu ("workout", "christmas", "country"
 thông tin duy nhất khi k = 0. TitleRecommender chấm mỗi bài bằng số playlist train
 cùng tên (đã chuẩn hóa) có chứa bài đó.
 
-HybridRecommender cộng hai điểm sau khi chia mỗi loại cho điểm cao nhất của nó
+HybridRecommender cộng các điểm sau khi chia mỗi loại cho điểm cao nhất của nó
 (để cùng thang 0-1):
     score = cooccurrence / max(cooccurrence) + title_weight * title / max(title)
+            [+ neighbor_weight * user_knn / max(user_knn) nếu có mô hình User-User kNN]
 Không có seed thì chỉ còn điểm theo tên; không có cả tên khớp thì dùng bài phổ biến.
 """
 import numpy as np
@@ -43,10 +44,11 @@ class TitleRecommender:
         return np.bincount(items, minlength=self.n_items).astype(np.float64)
 
 
-def combine(cooccurrence_scores, title_scores, title_weight):
-    """Cộng hai loại điểm sau khi đưa mỗi loại về thang 0-1."""
-    scores = np.zeros_like(cooccurrence_scores)
-    for part, weight in ((cooccurrence_scores, 1.0), (title_scores, title_weight)):
+def combine(cooccurrence_scores, title_scores, title_weight, *extra):
+    """Cộng các loại điểm sau khi đưa mỗi loại về thang 0-1; extra: thêm các cặp (điểm, trọng số)."""
+    # Không dùng zeros_like: bincount trên mảng rỗng (mọi bài seed đều chưa gặp trong train) trả về kiểu int
+    scores = np.zeros(len(cooccurrence_scores))
+    for part, weight in ((cooccurrence_scores, 1.0), (title_scores, title_weight), *extra):
         top = part.max()
         if top > 0 and weight > 0:
             scores += weight * part / top
@@ -56,14 +58,19 @@ def combine(cooccurrence_scores, title_scores, title_weight):
 class HybridRecommender:
     uses_title = True  # evaluate_models truyền thêm tên playlist cho mô hình có cờ này
 
-    def __init__(self, cooccurrence, titles, title_weight):
+    def __init__(self, cooccurrence, titles, title_weight, neighbors=None, neighbor_weight=0.0):
         self.cooccurrence = cooccurrence
         self.titles = titles
         self.title_weight = title_weight
+        self.neighbors = neighbors
+        self.neighbor_weight = neighbor_weight
         self.fallback = cooccurrence.fallback
 
     def score(self, seed_items, title=None):
-        return combine(self.cooccurrence.score(seed_items), self.titles.scores(title), self.title_weight)
+        extra = ()
+        if self.neighbors is not None and self.neighbor_weight > 0:
+            extra = ((self.neighbors.score(seed_items), self.neighbor_weight),)
+        return combine(self.cooccurrence.score(seed_items), self.titles.scores(title), self.title_weight, *extra)
 
     def recommend(self, seed_items, n, title=None, scores=None):
         """scores: kết quả score(seed_items, title) nếu đã tính sẵn, để khỏi tính lại."""

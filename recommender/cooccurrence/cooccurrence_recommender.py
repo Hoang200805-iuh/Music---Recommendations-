@@ -5,18 +5,24 @@ Co-occurrence recommender (item-item).
     score(j) = tổng theo i thuộc S của count(i, j) / sqrt(count(i) * count(j))
 trong đó count(i, j) là số playlist train chứa cả i và j.
 
-Bản tổng quát có 4 tham số, mặc định trùng công thức trên:
+Bản tổng quát có 5 tham số, mặc định trùng công thức trên:
     score(j) = tổng theo playlist p chứa j của  (tổng theo i thuộc S ∩ p của count(i)^-seed_exponent)^playlist_exponent
+               / |p|^length_exponent
                chia cho count(j)^item_exponent, và bỏ các bài j có count(j) < min_count.
 Với playlist_exponent = 1, phần tử số đúng bằng tổng theo i thuộc S của count(i, j) / count(i)^seed_exponent.
 seed_exponent quyết định bài seed hiếm hay phổ biến được tin hơn, item_exponent là
 mức phạt bài phổ biến, min_count loại bài quá hiếm (dễ được điểm cao do trùng hợp),
 playlist_exponent > 1 làm playlist chứa nhiều bài seed cùng lúc (giống playlist đang
-gợi ý hơn) có tiếng nói lớn hơn hẳn playlist chỉ chứa một bài seed.
+gợi ý hơn) có tiếng nói lớn hơn hẳn playlist chỉ chứa một bài seed, length_exponent > 0
+giảm tiếng nói của playlist dài (|p| là số bài khác nhau của p), vì playlist dài thường
+trộn nhiều gu. Với seed_exponent = length_exponent = alpha, item_exponent = beta,
+playlist_exponent = 1, đây chính là RP3beta (Paudel và cộng sự, 2016): bước đi ngẫu nhiên
+3 bước bài -> playlist -> bài, xác suất mỗi bước mũ alpha, chia cho độ phổ biến^beta.
 
 Ma trận đầy đủ X^T X có thể tới hàng trăm triệu ô khác 0, không vừa RAM máy cá
 nhân, nên điểm được tính khi cần bằng hai phép nhân thưa, cho kết quả y hệt:
-    score = (X^T (X w)^playlist_exponent) / count^item_exponent,  với w[i] = count(i)^-seed_exponent nếu i thuộc S
+    score = (X^T ((X w)^playlist_exponent / |p|^length_exponent)) / count^item_exponent,
+    với w[i] = count(i)^-seed_exponent nếu i thuộc S
 
 Mô hình chỉ cần 4 mảng chỉ số của X (dạng CSR theo playlist và CSC theo bài),
 nên các mảng này có thể là np.memmap đọc thẳng từ đĩa thay vì nạp hết vào RAM.
@@ -36,7 +42,8 @@ class CooccurrenceRecommender:
     """fallback dùng khi không đủ bài có điểm > 0."""
 
     def __init__(self, row_indptr, row_indices, col_indptr, col_indices, fallback,
-                 seed_exponent=0.5, item_exponent=0.5, min_count=1, playlist_exponent=1.0):
+                 seed_exponent=0.5, item_exponent=0.5, min_count=1, playlist_exponent=1.0,
+                 length_exponent=0.0):
         self.row_indptr, self.row_indices = row_indptr, row_indices
         self.col_indptr, self.col_indices = col_indptr, col_indices
         self.count = np.diff(np.asarray(col_indptr)).astype(np.float64)
@@ -45,6 +52,7 @@ class CooccurrenceRecommender:
         self.item_exponent = item_exponent
         self.min_count = min_count
         self.playlist_exponent = playlist_exponent
+        self.length_exponent = length_exponent
 
     @classmethod
     def from_matrix(cls, X, fallback, **params):
@@ -71,13 +79,17 @@ class CooccurrenceRecommender:
         unique_playlists, inverse = np.unique(playlists, return_inverse=True)
         return unique_playlists.astype(np.int64), np.bincount(inverse, weights=weights)
 
-    def raw_scores(self, seed_items, seed_exponent=None, playlist_exponent=None):
+    def raw_scores(self, seed_items, seed_exponent=None, playlist_exponent=None, length_exponent=None):
         """Điểm trước khi phạt bài phổ biến (xem công thức ở đầu file)."""
         if playlist_exponent is None:
             playlist_exponent = self.playlist_exponent
+        if length_exponent is None:
+            length_exponent = self.length_exponent
         playlists, weights = self.seed_playlists(seed_items, seed_exponent)
+        # lengths ở đây là số bài của từng playlist, đúng |p| trong công thức
         items, lengths = gather(self.row_indptr, self.row_indices, playlists)
-        return np.bincount(items, weights=np.repeat(weights ** playlist_exponent, lengths), minlength=len(self.count))
+        weights = weights ** playlist_exponent / lengths.astype(np.float64) ** length_exponent
+        return np.bincount(items, weights=np.repeat(weights, lengths), minlength=len(self.count))
 
     def score(self, seed_items):
         """Trả về mảng điểm cộng dồn của mọi bài (chưa loại seed)."""
