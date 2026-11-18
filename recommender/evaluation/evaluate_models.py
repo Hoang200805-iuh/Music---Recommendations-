@@ -166,9 +166,14 @@ def main():
     ap.add_argument("--hybrid", nargs=2, type=float, metavar=("PLAYLIST_EXP", "TITLE_WEIGHT"),
                     help="thêm mô hình hybrid (cần --tuned và --titles) với tham số chọn từ tune_hybrid (trên val)")
     ap.add_argument("--titles", help="đầu ra recommender.hybrid.playlist_titles")
+    ap.add_argument("--rerank", metavar="MODEL_PATH",
+                    help="thêm hybrid_knn (Hybrid + User-User) và rerank (LightGBM xếp lại, file mô hình từ "
+                         "recommender.rerank.train_reranker); cần --hybrid")
     args = ap.parse_args()
     if args.hybrid and not (args.tuned and args.titles):
         ap.error("--hybrid cần cả --tuned và --titles")
+    if args.rerank and not args.hybrid:
+        ap.error("--rerank cần --hybrid")
 
     start = time.time()
     assignment = read_assignment(args.split_file)
@@ -203,11 +208,23 @@ def main():
             title_ids = {}
             row_titles = np.array([title_ids.setdefault(titles[pid], len(title_ids)) if pid in titles else -1
                                    for pid in train.row_pids], dtype=np.int32)
-            models["hybrid"] = HybridRecommender(
-                CooccurrenceRecommender(*arrays, popularity, playlist_exponent=playlist_exp, **tuned_params),
-                TitleRecommender(arrays[0], arrays[1], row_titles, title_ids, X.shape[1]),
-                title_weight,
-            )
+            hybrid_cooccurrence = CooccurrenceRecommender(*arrays, popularity, playlist_exponent=playlist_exp,
+                                                          **tuned_params)
+            title_model = TitleRecommender(arrays[0], arrays[1], row_titles, title_ids, X.shape[1])
+            models["hybrid"] = HybridRecommender(hybrid_cooccurrence, title_model, title_weight)
+            if args.rerank:
+                # Cùng cấu hình với lúc tạo đặc trưng huấn luyện LightGBM
+                from recommender.neighbors.user_knn_recommender import UserKNNRecommender
+                from recommender.rerank import build_features
+                from recommender.rerank.features import FeatureBuilder
+                from recommender.rerank.lgbm_reranker import RerankRecommender
+
+                neighbors = UserKNNRecommender(hybrid_cooccurrence, **build_features.NEIGHBORS)
+                models["hybrid_knn"] = HybridRecommender(hybrid_cooccurrence, title_model, title_weight, neighbors,
+                                                         neighbor_weight=build_features.NEIGHBOR_WEIGHT)
+                builder = FeatureBuilder(hybrid_cooccurrence, title_model, neighbors, train.item_artists,
+                                         title_weight, build_features.NEIGHBOR_WEIGHT, unseen_artists=unseen_artists)
+                models["rerank"] = RerankRecommender.from_file(builder, args.rerank)
     del X
     train = train._replace(X=None)  # giải phóng ma trận gốc, mô hình đã giữ bản CSR/CSC riêng
 

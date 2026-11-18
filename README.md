@@ -33,7 +33,7 @@ Toàn bộ chạy trên dữ liệu MPD thật (787.000 playlist đọc được
   các bài còn lại là đáp án bị giấu. Bài không có trong train vẫn nằm trong đáp án (không gợi ý được,
   đúng với thực tế).
 - **Chọn tham số trên val, báo cáo trên test:** tập test chỉ dùng một lần ở bước cuối.
-- Mỗi k chấm trên 10.000 playlist test, mọi mô hình chấm trên **cùng** các playlist.
+- Mỗi k chấm trên 2.000 playlist test, mọi mô hình chấm trên **cùng** các playlist.
   Số sau dấu ± là nửa khoảng tin cậy 95%.
 
 ## Các mô hình
@@ -63,98 +63,112 @@ Toàn bộ chạy trên dữ liệu MPD thật (787.000 playlist đọc được
 
 ## Kết quả trên tập test
 
-10.000 playlist mỗi k (`reports/week2_results_with_tuned.csv`). Ở k = 0 không có seed nên cả 3 mô hình
-đều gợi ý bài phổ biến và cho cùng kết quả.
+Cả 6 mô hình chấm trên **cùng 2.000 playlist test mỗi k** (`reports/week2_results_all_models.csv`).
+Ở k = 0 không có bài seed nên 3 mô hình đầu đều gợi ý bài phổ biến, 3 mô hình sau đều dùng tên playlist,
+nên kết quả trong mỗi nhóm giống nhau. Số in đậm là cao nhất của từng cột.
 
 **NDCG@10** (± nửa khoảng tin cậy 95%)
 
 | Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
 |---|---|---|---|---|
-| Popularity | 0,0384 ± 0,0021 | 0,0375 ± 0,0021 | 0,0349 ± 0,0020 | 0,0318 ± 0,0019 |
-| Co-occurrence | 0,0384 ± 0,0021 | 0,1924 ± 0,0050 | 0,2157 ± 0,0052 | 0,1834 ± 0,0047 |
-| **Co-occurrence tinh chỉnh** | 0,0384 ± 0,0021 | **0,2312 ± 0,0052** | **0,2454 ± 0,0052** | **0,1967 ± 0,0046** |
+| Popularity | 0,0375 ± 0,0045 | 0,0364 ± 0,0044 | 0,0342 ± 0,0043 | 0,0334 ± 0,0042 |
+| Co-occurrence | 0,0375 ± 0,0045 | 0,1908 ± 0,0110 | 0,2153 ± 0,0115 | 0,1814 ± 0,0104 |
+| Co-occurrence tinh chỉnh | 0,0375 ± 0,0045 | 0,2306 ± 0,0114 | 0,2404 ± 0,0114 | 0,1929 ± 0,0103 |
+| Hybrid | **0,1581 ± 0,0103** | 0,2440 ± 0,0117 | 0,2461 ± 0,0114 | 0,1952 ± 0,0103 |
+| Hybrid + User-User | **0,1581 ± 0,0103** | 0,2451 ± 0,0115 | 0,2502 ± 0,0115 | 0,1950 ± 0,0104 |
+| **Hybrid + LightGBM** | **0,1581 ± 0,0103** | **0,2577 ± 0,0116** | **0,2588 ± 0,0117** | **0,2187 ± 0,0109** |
 
-**Recall@10**
-
-| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
-|---|---|---|---|---|
-| Popularity | 0,0062 | 0,0061 | 0,0058 | 0,0061 |
-| Co-occurrence | 0,0062 | 0,0403 | 0,0494 | 0,0460 |
-| **Co-occurrence tinh chỉnh** | 0,0062 | **0,0470** | **0,0537** | **0,0463** |
-
-**Recall@50**
+**Recall@10** (± nửa khoảng tin cậy 95%)
 
 | Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
 |---|---|---|---|---|
-| Popularity | 0,0238 | 0,0235 | 0,0231 | 0,0228 |
-| Co-occurrence | 0,0238 | 0,1126 | 0,1439 | 0,1427 |
-| **Co-occurrence tinh chỉnh** | 0,0238 | **0,1316** | **0,1553** | **0,1435** |
+| Popularity | 0,0062 ± 0,0009 | 0,0058 ± 0,0008 | 0,0056 ± 0,0008 | 0,0064 ± 0,0014 |
+| Co-occurrence | 0,0062 ± 0,0009 | 0,0401 ± 0,0033 | 0,0488 ± 0,0038 | 0,0455 ± 0,0041 |
+| Co-occurrence tinh chỉnh | 0,0062 ± 0,0009 | 0,0465 ± 0,0032 | 0,0525 ± 0,0035 | 0,0450 ± 0,0037 |
+| Hybrid | **0,0308 ± 0,0027** | 0,0492 ± 0,0033 | 0,0535 ± 0,0035 | 0,0451 ± 0,0036 |
+| Hybrid + User-User | **0,0308 ± 0,0027** | 0,0499 ± 0,0034 | 0,0553 ± 0,0037 | 0,0460 ± 0,0038 |
+| **Hybrid + LightGBM** | **0,0308 ± 0,0027** | **0,0523 ± 0,0034** | **0,0582 ± 0,0038** | **0,0542 ± 0,0044** |
 
-**Precision@10**
+**Recall@50** (± nửa khoảng tin cậy 95%)
 
 | Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
 |---|---|---|---|---|
-| Popularity | 0,0366 | 0,0357 | 0,0330 | 0,0300 |
-| Co-occurrence | 0,0366 | 0,1770 | 0,2025 | 0,1727 |
-| **Co-occurrence tinh chỉnh** | 0,0366 | **0,2119** | **0,2288** | **0,1845** |
+| Popularity | 0,0238 ± 0,0020 | 0,0231 ± 0,0019 | 0,0223 ± 0,0020 | 0,0229 ± 0,0025 |
+| Co-occurrence | 0,0238 ± 0,0020 | 0,1138 ± 0,0067 | 0,1451 ± 0,0074 | 0,1441 ± 0,0076 |
+| Co-occurrence tinh chỉnh | 0,0238 ± 0,0020 | 0,1321 ± 0,0066 | 0,1540 ± 0,0069 | 0,1418 ± 0,0071 |
+| Hybrid | 0,0917 ± 0,0061 | 0,1405 ± 0,0067 | 0,1564 ± 0,0069 | 0,1427 ± 0,0071 |
+| Hybrid + User-User | 0,0917 ± 0,0061 | 0,1425 ± 0,0067 | 0,1618 ± 0,0072 | 0,1490 ± 0,0074 |
+| **Hybrid + LightGBM** | **0,0926 ± 0,0061** | **0,1492 ± 0,0069** | **0,1690 ± 0,0075** | **0,1620 ± 0,0077** |
 
-### Hybrid và các độ đo bổ sung
+**Precision@10** (± nửa khoảng tin cậy 95%)
 
-Lần chạy thứ hai trên test thêm mô hình Hybrid và 2 độ đo Hit Rate@10, R-precision
-(`reports/week2_results_hybrid.csv`, 3.000 playlist mỗi k, là một phần của 10.000 playlist ở trên,
-nên số của 3 mô hình cũ hơi lệch so với bảng trên).
-
-**Hybrid so với Co-occurrence tinh chỉnh** (cùng 3.000 playlist; NDCG@10 có sai số khoảng ± 0,009)
-
-| Độ đo | k = 0 | k = 1 | k = 5 | k = 25 |
+| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
 |---|---|---|---|---|
-| NDCG@10 | 0,039 → **0,161** | 0,236 → **0,250** | 0,250 → **0,255** | 0,195 → 0,198 |
-| Recall@10 | 0,006 → **0,032** | 0,048 → **0,051** | 0,054 → 0,056 | 0,046 → 0,046 |
-| Recall@50 | 0,024 → **0,095** | 0,134 → **0,143** | 0,159 → 0,161 | 0,144 → 0,145 |
-| Precision@10 | 0,037 → **0,151** | 0,216 → **0,229** | 0,232 → 0,237 | 0,185 → 0,187 |
+| Popularity | 0,0353 ± 0,0042 | 0,0343 ± 0,0041 | 0,0319 ± 0,0039 | 0,0307 ± 0,0038 |
+| Co-occurrence | 0,0353 ± 0,0042 | 0,1731 ± 0,0102 | 0,2007 ± 0,0108 | 0,1720 ± 0,0099 |
+| Co-occurrence tinh chỉnh | 0,0353 ± 0,0042 | 0,2105 ± 0,0107 | 0,2237 ± 0,0107 | 0,1819 ± 0,0097 |
+| Hybrid | **0,1487 ± 0,0097** | 0,2230 ± 0,0109 | 0,2283 ± 0,0107 | 0,1839 ± 0,0097 |
+| Hybrid + User-User | **0,1487 ± 0,0097** | 0,2241 ± 0,0108 | 0,2331 ± 0,0108 | 0,1835 ± 0,0098 |
+| **Hybrid + LightGBM** | **0,1487 ± 0,0097** | **0,2359 ± 0,0108** | **0,2412 ± 0,0110** | **0,2060 ± 0,0103** |
 
-**Hit Rate@10** (tỉ lệ playlist có ít nhất 1 bài đúng trong 10 gợi ý) và **R-precision** (chấm R = số bài
-bị giấu gợi ý đầu; trúng bài được 1 điểm, chỉ trúng nghệ sĩ được 0,25, như RecSys Challenge 2018)
+**Hit Rate@10** (± nửa khoảng tin cậy 95%)
 
-| Mô hình | Hit@10 k=0 | k=1 | k=5 | k=25 | R-prec k=0 | k=1 | k=5 | k=25 |
-|---|---|---|---|---|---|---|---|---|
-| Popularity | 0,185 | 0,180 | 0,171 | 0,158 | 0,034 | 0,034 | 0,032 | 0,029 |
-| Co-occurrence | 0,185 | 0,563 | 0,615 | 0,575 | 0,034 | 0,120 | 0,145 | 0,133 |
-| Co-occurrence tinh chỉnh | 0,185 | 0,650 | 0,705 | 0,625 | 0,034 | 0,141 | 0,158 | 0,137 |
-| **Hybrid** | **0,490** | **0,673** | **0,712** | **0,627** | **0,107** | **0,151** | **0,161** | **0,138** |
+| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|---|
+| Popularity | 0,1780 ± 0,0168 | 0,1725 ± 0,0166 | 0,1635 ± 0,0162 | 0,1620 ± 0,0162 |
+| Co-occurrence | 0,1780 ± 0,0168 | 0,5540 ± 0,0218 | 0,6075 ± 0,0214 | 0,5745 ± 0,0217 |
+| Co-occurrence tinh chỉnh | 0,1780 ± 0,0168 | 0,6460 ± 0,0210 | 0,6915 ± 0,0202 | 0,6230 ± 0,0212 |
+| Hybrid | **0,4860 ± 0,0219** | 0,6710 ± 0,0206 | 0,7015 ± 0,0201 | 0,6250 ± 0,0212 |
+| Hybrid + User-User | **0,4860 ± 0,0219** | 0,6780 ± 0,0205 | 0,7050 ± 0,0200 | 0,6180 ± 0,0213 |
+| **Hybrid + LightGBM** | **0,4860 ± 0,0219** | **0,7105 ± 0,0199** | **0,7215 ± 0,0197** | **0,6610 ± 0,0208** |
 
-### Mô hình hai giai đoạn: Hybrid + User-User + LightGBM
+**R-precision** (± nửa khoảng tin cậy 95%)
 
-`reports/week2_results_rerank.csv`: 2.000 playlist test mỗi k, so sánh **từng cặp playlist** giữa mô hình
-gốc (Hybrid + User-User, chưa xếp lại) và sau khi LightGBM xếp lại. Số trong ngoặc là mức tăng tương đối.
+| Mô hình | k = 0 | k = 1 | k = 5 | k = 25 |
+|---|---|---|---|---|
+| Popularity | 0,0334 ± 0,0023 | 0,0326 ± 0,0022 | 0,0305 ± 0,0021 | 0,0283 ± 0,0020 |
+| Co-occurrence | 0,0334 ± 0,0023 | 0,1178 ± 0,0061 | 0,1409 ± 0,0065 | 0,1318 ± 0,0060 |
+| Co-occurrence tinh chỉnh | 0,0334 ± 0,0023 | 0,1379 ± 0,0060 | 0,1531 ± 0,0061 | 0,1352 ± 0,0057 |
+| Hybrid | 0,1042 ± 0,0060 | 0,1477 ± 0,0061 | 0,1557 ± 0,0061 | 0,1351 ± 0,0056 |
+| Hybrid + User-User | 0,1042 ± 0,0060 | 0,1492 ± 0,0061 | 0,1597 ± 0,0062 | 0,1382 ± 0,0058 |
+| **Hybrid + LightGBM** | **0,1050 ± 0,0059** | **0,1571 ± 0,0063** | **0,1660 ± 0,0064** | **0,1488 ± 0,0061** |
+
+Khoảng tin cậy ở trên là của từng mô hình riêng lẻ. Vì mọi mô hình chấm trên cùng playlist, so sánh
+**từng cặp playlist** cho khoảng tin cậy hẹp hơn nhiều. Mức tăng của Hybrid + LightGBM so với Hybrid + User-User
+(mô hình chọn ứng viên cho nó), `reports/week2_results_rerank.csv`:
 
 | Độ đo | k = 1 | k = 5 | k = 25 |
 |---|---|---|---|
-| NDCG@10 | 0,245 → **0,258** (+5%) | 0,250 → **0,259** (+3%) | 0,195 → **0,219** (+12%) |
-| Recall@10 | 0,050 → **0,052** (+5%) | 0,055 → **0,058** (+5%) | 0,046 → **0,054** (+18%) |
-| Recall@50 | 0,142 → **0,149** (+5%) | 0,162 → **0,169** (+4%) | 0,149 → **0,162** (+9%) |
-| R-precision | 0,149 → **0,157** (+5%) | 0,160 → **0,166** (+4%) | 0,138 → **0,149** (+8%) |
-| Hit@10 | 0,678 → **0,711** | 0,705 → **0,722** | 0,618 → **0,661** |
+| NDCG@10 | +0,0125 ± 0,0046 (+5%) | +0,0086 ± 0,0036 (+3%) | +0,0237 ± 0,0052 (+12%) |
+| Recall@10 | +0,0024 ± 0,0015 (+5%) | +0,0029 ± 0,0013 (+5%) | +0,0082 ± 0,0029 (+18%) |
+| Recall@50 | +0,0068 ± 0,0021 (+5%) | +0,0072 ± 0,0021 (+4%) | +0,0131 ± 0,0029 (+9%) |
+| R-precision | +0,0079 ± 0,0021 (+5%) | +0,0062 ± 0,0016 (+4%) | +0,0106 ± 0,0022 (+8%) |
+| Hit Rate@10 | +0,0325 ± 0,0120 (+5%) | +0,0165 ± 0,0104 (+2%) | +0,0430 ± 0,0145 (+7%) |
 
-- Mọi mức tăng đều lớn hơn khoảng tin cậy 95% của chênh lệch vài lần (ví dụ NDCG@10 ở k = 25:
-  +0,024 ± 0,005), nên đây là cải thiện thật chứ không phải do may.
-- k = 0: giữ nguyên mô hình gốc (NDCG@10 0,158). Thử xếp lại ở k = 0 làm kết quả kém đi một chút.
+- Mọi mức tăng đều lớn hơn khoảng tin cậy, nên LightGBM tốt hơn thật chứ không phải do may.
+- Ở k = 0 LightGBM giữ nguyên thứ tự gốc (thử xếp lại ở k = 0 làm kết quả kém đi). Recall@50 và R-precision
+  ở k = 0 lệch Hybrid một chút do cách cắt các bài cùng điểm ở cuối danh sách 300 ứng viên.
 - Đặc trưng quan trọng nhất (`reports/week2_rerank_feature_importance.csv`): thứ hạng và điểm của mô hình
   gốc (65%), tỉ lệ playlist cùng tên chứa bài (5%), thứ hạng User-User (4%), điểm Co-occurrence từ 5 bài seed
   cuối (4%), thứ hạng Co-occurrence (3,5%).
 - Dữ liệu huấn luyện quan trọng: lần đầu chỉ dùng 1.500 playlist val mỗi k, mô hình dừng ở 23 cây và
   chỉ tăng NDCG@10 1–5%; tăng lên 6.000 playlist mỗi k (và cây nhỏ hơn, học chậm hơn) cho kết quả trên.
 - Hạn chế: LightGBM chỉ xếp lại 300 ứng viên, bài đúng không lọt vào đó thì vẫn không gợi ý được.
+- Các lần chấm trước (`reports/week2_results_with_tuned.csv`: 3 mô hình đầu trên 10.000 playlist mỗi k;
+  `reports/week2_results_hybrid.csv`: 4 mô hình đầu trên 3.000 playlist) cho kết quả khớp với bảng trên,
+  với khoảng tin cậy hẹp hơn.
 
 ### Nhận xét
 
 - Co-occurrence vượt xa Popularity (gấp 5–7 lần ở mọi độ đo) ngay khi có 1 bài seed.
+- Hybrid + LightGBM tốt nhất ở mọi độ đo và mọi k có bài seed; ở k = 0 ngang Hybrid.
 - Bản tinh chỉnh tốt hơn công thức gốc ở cả 3 mức k có seed (NDCG@10 +20% / +14% / +7%),
-  khoảng tin cậy không chồng nhau. Kết quả trên test khớp với val, nên tham số không bị chọn "may".
+  trên 10.000 playlist khoảng tin cậy không chồng nhau. Kết quả trên test khớp với val, nên tham số không bị chọn "may".
 - Tên playlist giúp nhiều nhất ở k = 0: NDCG@10 và Recall@50 tăng khoảng 4 lần, tỉ lệ playlist có ít nhất
-  1 gợi ý đúng tăng từ 18,5% lên 49%. Khi đã có seed thì tên chỉ giúp thêm một chút (rõ nhất ở k = 1),
+  1 gợi ý đúng tăng từ 17,8% lên 48,6%. Khi đã có seed thì tên chỉ giúp thêm một chút (rõ nhất ở k = 1),
   mức tăng nằm trong sai số của từng mô hình nên chưa khẳng định chắc được.
-- Với 10 gợi ý, Co-occurrence tinh chỉnh và Hybrid trúng ít nhất 1 bài ở 65–71% playlist khi có seed.
+- Với 10 gợi ý, Co-occurrence tinh chỉnh và Hybrid trúng ít nhất 1 bài ở 62–70% playlist khi có seed,
+  Hybrid + LightGBM ở 66–72%.
 - **Recall@10 thấp là bình thường:** playlist test giấu trung bình vài chục bài trong khi chỉ được gợi ý
   10 bài, nên Recall@10 tối đa thường chỉ khoảng 0,1–0,3. Precision@10 khoảng 0,2 nghĩa là trung bình
   2 trong 10 gợi ý trúng đúng bài người dùng đã chọn, giữa 1,7 triệu bài.
@@ -164,7 +178,7 @@ gốc (Hybrid + User-User, chưa xếp lại) và sau khi LightGBM xếp lại. 
 - Các biến thể của cùng một ý tưởng "đếm đồng xuất hiện" (RP3beta, User-User kNN) đều cho kết quả ngang
   nhau: mô hình loại này đã gần chạm trần. Muốn tăng rõ phải thêm loại thông tin mới (nghệ sĩ, độ phổ biến,
   thứ tự bài) và học cách kết hợp, như mô hình hai giai đoạn: NDCG@10 ở k = 1 tăng từ 0,231
-  (Co-occurrence tinh chỉnh) lên 0,258, khoảng +12% (hai lần chấm dùng mẫu playlist khác nhau nên chỉ so gần đúng).
+  (Co-occurrence tinh chỉnh) lên 0,258 (+12%), ở k = 25 từ 0,193 lên 0,219 (+13%).
 
 ### Lưu ý về dữ liệu
 
@@ -223,6 +237,10 @@ python -m recommender.rerank.build_features $COMMON --titles hdfs_sim/music/proc
 python -m recommender.rerank.train_reranker --features-dir hdfs_sim/music/analytics/rerank_features \
     --out reports/week2_results_rerank.csv --importance-out reports/week2_rerank_feature_importance.csv \
     --model-out hdfs_sim/music/analytics/rerank_features/reranker_lgbm.txt
+# Chấm cả 6 mô hình trên cùng 2.000 playlist test mỗi k (khoảng 2 giờ)
+python -m recommender.evaluation.evaluate_models $COMMON --titles hdfs_sim/music/processed/playlist_titles.tsv \
+    --out reports/week2_results_all_models.csv --tuned 0.5 0.25 10 --hybrid 1.0 0.1 \
+    --rerank hdfs_sim/music/analytics/rerank_features/reranker_lgbm.txt --max-playlists 2000
 
 # 7. Dựng chỉ mục cho app (một lần, khoảng 2–3 phút), chép mô hình LightGBM vào rồi mở app
 python -m recommender.app_index $COMMON --titles hdfs_sim/music/processed/playlist_titles.tsv \
@@ -242,6 +260,7 @@ Thời gian và RAM trên laptop 16GB: đánh giá 10.000 playlist mỗi k (3 m�
 
 | File | Nội dung |
 |---|---|
+| `reports/week2_results_all_models.csv` | **Cả 6 mô hình trên cùng 2.000 playlist test mỗi k** (bảng chính) |
 | `reports/week2_baseline_results.csv` | Popularity và Co-occurrence gốc trên test |
 | `reports/week2_results_with_tuned.csv` | Thêm Co-occurrence tinh chỉnh và Precision@10 |
 | `reports/week2_results_hybrid.csv` | Cả 4 mô hình, thêm Hit Rate@10 và R-precision |
