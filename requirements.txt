@@ -6,3 +6,7 @@ matplotlib
 streamlit
 pytest
 lightgbm
+fastapi
+uvicorn
+httpx
+streamlit-searchbox==0.1.24

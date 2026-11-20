@@ -11,6 +11,7 @@ Các file trong thư mục chỉ mục:
     counts.npy                  số đếm MapReduce trên train của từng bài
     ranked.npy                  id bài xếp theo độ phổ biến (giống PopularityRecommender)
     names.bin + name_offsets    tên "nghệ sĩ – bài" theo id
+    uris.bin + uri_offsets      URI Spotify của từng bài theo id (để API nhận seed dạng URI)
     search.bin + search_offsets tên viết thường xếp theo độ phổ biến, để tìm kiếm
     artists.npy                 id nghệ sĩ của từng bài (để chấm R-precision có điểm nghệ sĩ)
     row_titles.npy              id tên (đã chuẩn hóa) của từng playlist train, -1 = không có tên
@@ -23,6 +24,10 @@ Các file trong thư mục chỉ mục:
 Cách dựng (chạy từ thư mục gốc repo):
     python -m recommender.app_index --flat <flat.tsv> --split-file <playlist_split.tsv> \
         --popularity <part-00000 đếm trên train> --titles <playlist_titles.tsv> --out <thư mục chỉ mục>
+
+Chỉ mục dựng trước khi có uris.bin: chỉ ghi thêm file URI (khoảng 2 phút, không dựng lại cả chỉ mục):
+    python -m recommender.app_index --flat <flat.tsv> --split-file <playlist_split.tsv> --out <thư mục chỉ mục> \
+        --uris-only
 """
 import argparse
 import array
@@ -67,6 +72,7 @@ def build(flat_path, split_path, popularity_path, titles_path, out_dir, n_test=N
     test_pids = set(random.Random(seed).sample(sorted(p for p, s in assignment.items() if s == "test"), n_test))
 
     vocab = {}
+    uris = []
     names = []
     artist_ids = {}
     item_artists = array.array("i")
@@ -85,6 +91,7 @@ def build(flat_path, split_path, popularity_path, titles_path, out_dir, n_test=N
                 item = vocab.get(uri)
                 if item is None:
                     item = vocab[uri] = len(vocab)
+                    uris.append(uri.decode("utf-8"))
                     names.append(f"{artist_name.decode('utf-8')} – {track_name.decode('utf-8')}")
                     item_artists.append(artist_ids.setdefault(artist_name, len(artist_ids)))
                 cols.append(item)
@@ -134,6 +141,7 @@ def build(flat_path, split_path, popularity_path, titles_path, out_dir, n_test=N
     np.save(out_dir / "row_titles.npy", np.array(row_titles, dtype=np.int32))
 
     np.save(out_dir / "name_offsets.npy", _write_strings(out_dir / "names", names))
+    np.save(out_dir / "uri_offsets.npy", _write_strings(out_dir / "uris", uris))
     np.save(out_dir / "search_offsets.npy",
             _write_strings(out_dir / "search", [names[i].lower() for i in ranked]))
 
@@ -163,6 +171,52 @@ def build(flat_path, split_path, popularity_path, titles_path, out_dir, n_test=N
             "unseen_artists": {str(item): artist for item, _, artist in unseen.values()},
         }, f, ensure_ascii=False)
     print(f"Đã ghi chỉ mục vào {out_dir} | tổng {time.time() - start:.0f}s", flush=True)
+
+
+def write_uris(flat_path, split_path, out_dir):
+    """Ghi uris.bin cho một chỉ mục đã có: id bài được đánh theo thứ tự xuất hiện đầu tiên
+    trong các playlist train, giống hệt build."""
+    out_dir = Path(out_dir)
+    assignment = read_assignment(split_path)
+    vocab = {}
+    with open(flat_path, "rb") as f:
+        for line in f:
+            pid, uri = line.split(b"\t", 2)[:2]
+            if assignment[int(pid)] == "train" and uri not in vocab:
+                vocab[uri] = len(vocab)
+    with open(out_dir / "test_meta.json", encoding="utf-8") as f:
+        n_items = json.load(f)["n_items"]
+    if len(vocab) != n_items:
+        raise SystemExit(f"Số bài ({len(vocab):,}) khác chỉ mục ({n_items:,}): file chia tập hoặc dữ liệu đã đổi")
+    np.save(out_dir / "uri_offsets.npy", _write_strings(out_dir / "uris", [uri.decode("utf-8") for uri in vocab]))
+
+
+class UriIndex:
+    """Tra id bài theo URI và ngược lại. URI được xếp thành mảng numpy để tìm nhị phân,
+    gọn hơn nhiều so với dict Python (khoảng 75MB cho 1,7 triệu bài)."""
+
+    def __init__(self, index_dir):
+        index_dir = Path(index_dir)
+        offsets = np.load(index_dir / "uri_offsets.npy")
+        data = (index_dir / "uris.bin").read_bytes()
+        uris = np.array([data[offsets[i]: offsets[i + 1]] for i in range(len(offsets) - 1)])
+        self._order = np.argsort(uris, kind="stable").astype(np.int32)
+        self._sorted = uris[self._order]
+        self._uris = uris
+
+    def __len__(self):
+        return len(self._uris)
+
+    def item(self, uri):
+        """id của bài, hoặc None nếu bài không có trong tập train."""
+        key = uri.strip().encode("utf-8")
+        pos = int(np.searchsorted(self._sorted, key))
+        if pos < len(self._sorted) and self._sorted[pos] == key:
+            return int(self._order[pos])
+        return None
+
+    def __getitem__(self, item):
+        return self._uris[item].decode("utf-8")
 
 
 class NameStore:
@@ -228,6 +282,8 @@ def load(index_dir):
         "meta": meta,
         "counts": np.load(index_dir / "counts.npy"),
         "names": NameStore(index_dir, ranked),
+        # Chỉ mục cũ chưa có uris.bin: None (app không cần, API thì cần; xem --uris-only)
+        "uris": UriIndex(index_dir) if (index_dir / "uris.bin").exists() else None,
         "popularity": popularity,
         "cooccurrence": CooccurrenceRecommender(*arrays, popularity),
         "cooccurrence_tuned": CooccurrenceRecommender(*arrays, popularity, **TUNED_PARAMS),
@@ -267,11 +323,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--flat", required=True)
     ap.add_argument("--split-file", required=True)
-    ap.add_argument("--popularity", required=True, help="đầu ra MapReduce đếm trên tập train")
-    ap.add_argument("--titles", required=True, help="đầu ra recommender.hybrid.playlist_titles")
+    ap.add_argument("--popularity", help="đầu ra MapReduce đếm trên tập train")
+    ap.add_argument("--titles", help="đầu ra recommender.hybrid.playlist_titles")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--uris-only", action="store_true", help="chỉ ghi thêm uris.bin cho chỉ mục đã có")
     args = ap.parse_args()
-    build(args.flat, args.split_file, args.popularity, args.titles, args.out)
+    if args.uris_only:
+        write_uris(args.flat, args.split_file, args.out)
+    elif not (args.popularity and args.titles):
+        ap.error("dựng chỉ mục cần --popularity và --titles")
+    else:
+        build(args.flat, args.split_file, args.popularity, args.titles, args.out)
 
 
 if __name__ == "__main__":

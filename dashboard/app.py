@@ -15,5 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 st.set_page_config(page_title="Gợi ý nhạc", page_icon="🎧", layout="wide")
 
 # Khai báo tường minh để sidebar không hiện các trang còn trống của khung repo
-page = st.navigation([st.Page("pages/3_Recommendation.py", title="Gợi ý nhạc", icon="🎧")])
+page = st.navigation([
+    st.Page("pages/3_Recommendation.py", title="So sánh mô hình", icon="🎧"),
+    st.Page("pages/5_API_Recommend.py", title="Gợi ý qua API", icon="✨"),
+])
 page.run()

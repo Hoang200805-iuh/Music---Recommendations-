@@ -4,6 +4,87 @@ Project structure for large-scale music ingestion, processing, recommendation, A
 
 ---
 
+# API, giao diện và thí nghiệm hiệu năng
+
+| Việc | Trạng thái | Code |
+|---|---|---|
+| FastAPI: `POST /recommend`, `GET /health` (thêm `GET /tracks/search` cho ô tìm bài) | Xong | `api/`, tài liệu `docs/api.md` |
+| Giao diện gọi API: tên playlist + chọn bài tự gợi ý, Top-10 kèm lý do | Xong | `dashboard/pages/5_API_Recommend.py` |
+| Thí nghiệm hiệu năng xây bảng mô hình: 10% / 100% slice, 1 / 4 core | Xong | `src/benchmark_build.py` |
+
+## API
+
+API nạp artifact đã xuất một lần lúc khởi động (chỉ mục memory-map, mô hình LightGBM, ALS nếu đã xuất),
+không dùng Spark khi chạy: khởi động khoảng 5 giây, khoảng 420MB RAM. Chi tiết request/response,
+định dạng xuất ALS: `docs/api.md`.
+
+```bash
+uvicorn api.main:app --port 8000          # tài liệu tương tác: http://localhost:8000/docs
+```
+
+Mỗi bài gợi ý có lý do tính từ dữ liệu train: **hay đi cùng bài X** (bài seed cùng nằm trong nhiều playlist
+nhất), **cùng gu với playlist của bạn** (có trong 100 playlist train giống nhất), **cùng gu với các playlist
+cùng tên**, **phổ biến**.
+
+## Giao diện gọi API
+
+Trang "Gợi ý qua API" của dashboard chỉ gọi API: nhập tên playlist, thêm bài bằng ô tìm kiếm tự gợi ý khi gõ,
+chọn mô hình, xem Top-10 kèm lý do.
+
+```bash
+uvicorn api.main:app --port 8000                              # cửa sổ 1
+streamlit run dashboard/app.py --server.address 127.0.0.1     # cửa sổ 2, chọn trang "Gợi ý qua API"
+```
+
+## Thí nghiệm hiệu năng: thời gian xây bảng mô hình
+
+**Cách đo.** Xây các bảng mà API và app dùng, đọc thẳng từ file slice JSON gốc của MPD:
+bảng popularity (đếm số lượt mỗi bài, như job MapReduce), ma trận playlist × bài dạng CSR và CSC
+(Co-occurrence tính điểm từ đây) và bảng tên playlist đã chuẩn hóa. Pipeline theo kiểu MapReduce:
+
+- **map** (song song): mỗi slice đọc JSON, đếm bài, lấy danh sách bài và tên của từng playlist;
+- **reduce** (tuần tự): gộp số đếm, đánh số bài, nối các cặp (playlist, bài);
+- **dựng ma trận** (tuần tự): CSR, CSC, xếp hạng độ phổ biến.
+
+Số core bị giới hạn bằng CPU affinity (tiến trình con thừa hưởng), chọn các core vật lý khác nhau, nên
+"1 core" thật sự chỉ dùng 1 core. 10% = 79 slice lấy đều (cứ 10 slice lấy 1). Mỗi cấu hình chạy trong
+tiến trình riêng, đo RAM của cả cây tiến trình. 10% chạy 3 lần (file đã nằm trong cache), 100% chạy 2 lần
+(25GB lớn hơn RAM nên lần nào cũng đọc lại từ đĩa). Máy: AMD Ryzen 7 6800H (8 core / 16 luồng), 16GB RAM,
+SSD, Windows 11, Python 3.14. Mọi cấu hình cho ra đúng cùng số bài, số ô ma trận và số đếm.
+
+| Dữ liệu | Core | Thời gian (giây) | Map + reduce | Reduce tuần tự | Dựng ma trận | Playlist/giây | Tăng tốc | Hiệu suất | RAM cao nhất |
+|---|---|---|---|---|---|---|---|---|---|
+| 10%: 79 slice, 79.000 playlist, 598.062 bài | 1 | 49,4 (47,1–51,5) | 48,5 | 9,8 | 0,9 | 1.598 | 1,00× | 100% | 302 MB |
+| 10% | 4 | 15,8 (15,3–16,9) | 15,0 | 13,1 | 0,9 | 4.989 | **3,12×** | 78% | 669 MB |
+| 100%: 787 slice, 787.000 playlist, 2.014.098 bài | 1 | 434,6 (419,9–449,3) | 428,6 | 85,5 | 6,1 | 1.811 | 1,00× | 100% | 1.347 MB |
+| 100% | 4 | 132,8 (128,4–137,2) | 126,8 | 124,4 | 6,1 | 5.926 | **3,27×** | 82% | 1.928 MB |
+
+Thời gian là trung bình các lần chạy (trong ngoặc: nhanh nhất – chậm nhất). Hiệu suất = tăng tốc / số core.
+Số liệu từng lần chạy: `reports/benchmark_build_runs.csv`; bảng tổng hợp: `reports/benchmark_build_summary.csv`.
+
+**Nhận xét**
+
+- **Dữ liệu tăng 10 lần, thời gian tăng khoảng 8,5–8,8 lần**, gần tuyến tính; số bài chỉ tăng 3,4 lần vì
+  phần lớn bài phổ biến đã xuất hiện ngay trong 10% dữ liệu.
+- **4 core nhanh hơn 1 core khoảng 3,1–3,3 lần** (hiệu suất 78–82%), vì phần nặng nhất là đọc JSON
+  nằm ở pha map, chạy song song được.
+- **Giới hạn là pha reduce tuần tự:** với 4 core, gần như toàn bộ thời gian (124 trên 133 giây ở 100%) là
+  tiến trình chính đánh số bài và nối dữ liệu; các tiến trình map đọc xong nhanh hơn tốc độ reduce xử lý.
+  Thêm core cũng không nhanh hơn nữa (định luật Amdahl). Muốn tăng tiếp phải chia nhỏ cả reduce, như
+  Hadoop/Spark làm (chia bài theo khóa cho nhiều reducer).
+- Reduce ở 4 core (124 giây) chậm hơn ở 1 core (85 giây) vì tiến trình chính phải tranh 4 core với 4 tiến
+  trình map và chờ nhận dữ liệu từ chúng.
+- **RAM tăng khi thêm core** (1,35GB → 1,93GB ở 100%) vì mỗi tiến trình map giữ một slice đã đọc,
+  và bảng đánh số bài lớn dần theo số bài.
+- Thí nghiệm dùng pipeline Python mô phỏng MapReduce chứ không dùng Spark (máy chưa cài Spark).
+
+```bash
+python src/benchmark_build.py --data <thư mục mpd.slice.*.json> --fraction 0.1 --cores 4 \
+    --out reports/benchmark_build_runs.csv
+```
+
+---
+
 # Tuần 2 — Mô hình gợi ý và đánh giá
 
 Toàn bộ chạy trên dữ liệu MPD thật (787.000 playlist đọc được, 788 file slice, bỏ 1 file hỏng).
