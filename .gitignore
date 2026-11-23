@@ -9,3 +9,18 @@ outputs/*
 !outputs/figures/
 !outputs/logs/
 !outputs/reports/
+# ---- Tuan 1 - Nguoi A ----
+# Dữ liệu MPD gốc - không commit theo điều khoản sử dụng (xem docs/mpd_terms_of_use.md)
+data/raw/
+data/sample/
+data/parquet/
+hdfs_sim/music/raw/
+hdfs_sim/music/processed/
+hdfs_sim/music/analytics/
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# Dataset MPD tải về (~25GB)
+archive(1)/

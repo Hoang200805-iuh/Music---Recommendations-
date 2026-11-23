@@ -1,0 +1,10 @@
+# Chỉ gửi vào Docker những gì image cần: code và chỉ mục app.
+# Dữ liệu thô, file làm phẳng, đặc trưng huấn luyện (vài GB) không cần khi chạy.
+**
+!docker/requirements.txt
+!recommender/**
+!api/**
+!dashboard/**
+!hdfs_sim/music/analytics/app_index/**
+**/__pycache__
+**/*.pyc
