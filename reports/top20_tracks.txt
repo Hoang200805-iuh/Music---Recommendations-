@@ -1,0 +1,20 @@
+spotify:track:7KXjTSCq5nL1LoYtL7XAwS	36543	HUMBLE.	Kendrick Lamar
+spotify:track:1xznGGDReH1oQq0xzbwXa3	34128	One Dance	Drake
+spotify:track:7yyRTcZmCiyzzJlNzGC9Ol	32500	Broccoli (feat. Lil Yachty)	DRAM
+spotify:track:7BKLCZ1jbUBVqRi2FVlTVw	32419	Closer	The Chainsmokers
+spotify:track:3a1lNhkSLSkpJE4MSHpDu9	31377	Congratulations	Post Malone
+spotify:track:5hTpBe8h35rJ67eAWHQsJx	27673	Caroline	Aminé
+spotify:track:2EEeOnHehOozLq4aS0n6SL	27571	iSpy (feat. Lil Yachty)	KYLE
+spotify:track:7GX5flRQZVHRAGd6B4TmDO	27508	XO TOUR Llif3	Lil Uzi Vert
+spotify:track:4Km5HrUvYTaSUfiSGPJeQR	27429	Bad and Boujee (feat. Lil Uzi Vert)	Migos
+spotify:track:152lZdxL1OR0ZMW6KquMif	27128	Location	Khalid
+spotify:track:0SGkqnVQo9KPytSri1H6cF	26464	Bounce Back	Big Sean
+spotify:track:5dNfHmqgr128gMY2tc5CeJ	25512	Ignition - Remix	R. Kelly
+spotify:track:62vpWI1CHwFy7tMIcSStl8	25412	No Role Modelz	J. Cole
+spotify:track:0VgkVdmE4gld66l8iyGjgx	25085	Mask Off	Future
+spotify:track:0v9Wz8o0BT8DU38R4ddjeH	24878	No Problem (feat. Lil Wayne & 2 Chainz)	Chance The Rapper
+spotify:track:3DXncPQOG4VBw3QHh3S817	24627	I'm the One	DJ Khaled
+spotify:track:6gBFPUFcJLzWGx4lenP6h2	24541	goosebumps	Travis Scott
+spotify:track:27GmP9AWRs744SzKcpJsTZ	24494	Jumpman	Drake
+spotify:track:343YBumqHu19cGoGARUTsd	24054	Fake Love	Drake
+spotify:track:6O6M7pJLABmfBRoGZMu76Y	24017	Roses	The Chainsmokers
