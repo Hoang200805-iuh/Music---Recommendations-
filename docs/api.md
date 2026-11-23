@@ -32,7 +32,17 @@ playlist × bài đã xuất, cho kết quả y hệt công thức.
 
 ### Định dạng ALS đã xuất
 
-Thư mục `MUSIC_ALS_DIR` gồm:
+Bundle từ `python scripts/run_als_local.py` gồm:
+
+- `item_factors.npy`: ma trận factors float32.
+- `items.tsv`: `row_id<TAB>track_uri`, đầy đủ các hàng.
+- `metadata.json`: rank, regParam, alpha, fingerprint train/vocabulary, SHA-256 factors.
+
+Đặt `MUSIC_ALS_DIR` tới `outputs/als_local/models/als_implicit` trước khi chạy API
+và dashboard. Xem [hướng dẫn ALS](run_als_local.md). Các URI được ghép với chỉ mục
+ứng dụng. Bundle hỏng bị báo lỗi khi nạp.
+
+Định dạng xuất cũ cũng được hỗ trợ. Thư mục `MUSIC_ALS_DIR` gồm:
 
 - `item_factors.npy`: float32, m × r, vector của m bài (`itemFactors` của `ALSModel`)
 - `track_uris.txt`: m dòng, URI Spotify của từng hàng

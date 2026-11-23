@@ -1,5 +1,6 @@
 """Recommendation page."""
 import html
+import os
 import random
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,13 +10,15 @@ import streamlit as st
 
 from dashboard.components.track_cards import apply_theme, hero_html, panel_html, track_row_html
 from recommender import app_index
+from recommender.als.serving_als import load_als
 from recommender.evaluation.ndcg_at_k import ndcg_at_k
 from recommender.evaluation.precision_at_k import max_recall_at_k, precision_at_k
 from recommender.evaluation.r_precision import r_precision
 from recommender.evaluation.recall_at_k import recall_at_k
 
 ROOT = Path(__file__).resolve().parents[2]
-INDEX_DIR = ROOT / "hdfs_sim/music/analytics/app_index"
+INDEX_DIR = Path(os.environ.get("MUSIC_APP_INDEX", ROOT / "hdfs_sim/music/analytics/app_index"))
+ALS_DIR = Path(os.environ.get("MUSIC_ALS_DIR", ROOT / "hdfs_sim/music/analytics/als"))
 
 TOP_N = 10  # số bài hiện ra
 EVAL_N = 50  # số bài mô hình gợi ý để chấm Recall@50, giống evaluate_models
@@ -26,7 +29,9 @@ QUICK_PICKS = ("Wonderwall", "Fly Me To The Moon", "One Dance", "Mr. Brightside"
 @st.cache_resource(show_spinner="Đang mở chỉ mục dữ liệu...")
 def load_app_data():
     # Dữ liệu lớn được memory-map từ đĩa, không nạp hết vào RAM (xem recommender/app_index.py)
-    return SimpleNamespace(**app_index.load(INDEX_DIR))
+    data = app_index.load(INDEX_DIR)
+    data["als"], data["n_als_tracks"] = load_als(ALS_DIR, data["uris"], data["popularity"]) if data["uris"] is not None else (None, 0)
+    return SimpleNamespace(**data)
 
 
 def track_name(item, data):
@@ -167,6 +172,15 @@ def show_recommendations(seed, data, hidden=None, title=None):
                     "recommender.rerank.train_reranker) vào thư mục chỉ mục, rồi khởi động lại app.")
         else:
             st.html(rerank_panel(seed, title, data, hidden))
+    if data.als is not None:
+        scores = data.als.score(seed)
+        items = data.als.recommend(seed, n_to_recommend(hidden), scores)
+        labels = {i: (f"{scores[i]:.3f}", None) if np.isfinite(scores[i]) else ("bù phổ biến", None)
+                  for i in items}
+        st.html(recommendation_panel("ALS", "Spark implicit ALS · suy luận từ các bài seed",
+                                     items, scores, data, hidden, labels=labels))
+    else:
+        st.info("Chưa có bundle ALS. Train theo docs/run_als_local.md và đặt MUSIC_ALS_DIR tới thư mục bundle rồi khởi động lại app.")
     with st.expander("Mô hình Hybrid + LightGBM hoạt động thế nào?"):
         st.markdown(RERANK_NOTE)
 
@@ -263,7 +277,7 @@ data = load_app_data()
 st.html(hero_html(
     "Hôm nay nghe gì",
     "Gợi ý nhạc theo gu của bạn",
-    f"So sánh {3 if data.rerank is None else 4} mô hình trên toàn bộ tập train: {data.meta['n_train_playlists']:,} playlist "
+    f"So sánh {3 + int(data.rerank is not None) + int(data.als is not None)} mô hình trên toàn bộ tập train: {data.meta['n_train_playlists']:,} playlist "
     f"và {data.meta['n_items']:,} bài. Tab playlist có thật dùng {len(data.test_playlists)} playlist "
     "ngẫu nhiên trong tập test.",
 ))

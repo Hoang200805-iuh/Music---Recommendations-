@@ -18,6 +18,7 @@ import csv
 import math
 import random
 import time
+from pathlib import Path
 from collections import namedtuple
 
 import numpy as np
@@ -33,12 +34,31 @@ from recommender.evaluation.split_playlists import read_assignment
 from recommender.hybrid.hybrid_recommender import HybridRecommender, TitleRecommender
 from recommender.hybrid.playlist_titles import read_titles
 from recommender.popularity.popularity_recommender import PopularityRecommender, read_mapreduce_counts
+from recommender.report_files import write_report
 
 SEED_SIZES = (0, 1, 5, 25)
 TOP_N = 50
 METRICS = ("recall@10", "recall@50", "ndcg@10", "precision@10", "hit@10", "r_precision")
 
 TrainData = namedtuple("TrainData", "X vocab row_pids item_artists artist_ids")
+
+
+class ReadProgress:
+    def __init__(self, path, label):
+        self.total = Path(path).stat().st_size
+        self.label = label
+        self.start = self.last = time.monotonic()
+        print(f"[{label}] Bắt đầu đọc {self.total / 1e9:.3f} GB: {path}", flush=True)
+
+    def update(self, position, final=False):
+        now = time.monotonic()
+        if final or now - self.last >= 10:
+            elapsed = max(now - self.start, 0.001)
+            print(f"[{self.label}] {100 * position / max(self.total, 1):.1f}% | "
+                  f"{position / 1e6:.0f}/{self.total / 1e6:.0f} MB | "
+                  f"{position / elapsed / 1e6:.2f} MB/s | {elapsed:.0f}s", flush=True)
+            self.last = now
+
 
 
 def load_train(flat_path, assignment):
@@ -50,8 +70,11 @@ def load_train(flat_path, assignment):
     pid_to_row = {}
     rows = array.array("i")
     cols = array.array("i")
+    progress = ReadProgress(flat_path, "load train")
     with open(flat_path, "rb") as f:
-        for line in f:
+        for line_number, line in enumerate(f, 1):
+            if line_number % 100000 == 0:
+                progress.update(f.tell())
             pid, uri, _, artist = line.rstrip(b"\r\n").split(b"\t", 3)
             pid = int(pid)
             if assignment[pid] == "train":
@@ -61,12 +84,15 @@ def load_train(flat_path, assignment):
                     item = vocab[uri] = len(vocab)
                     item_artists.append(artist_ids.setdefault(artist, len(artist_ids)))
                 cols.append(item)
+        progress.update(f.tell(), final=True)
+    print("[load train] Dựng ma trận CSR nhị phân...", flush=True)
     X = sparse.csr_matrix(
         (np.ones(len(rows), dtype=np.int32),
          (np.frombuffer(rows, dtype=np.int32), np.frombuffer(cols, dtype=np.int32))),
         shape=(len(pid_to_row), len(vocab)),
     )
     X.data[:] = 1  # playlist lặp lại một bài vẫn chỉ tính là 1
+    print(f"[load train] Xong: {X.shape[0]:,} playlist, {X.shape[1]:,} bài, {X.nnz:,} tương tác", flush=True)
     return TrainData(X, vocab, list(pid_to_row), np.frombuffer(item_artists, dtype=np.int32), artist_ids)
 
 
@@ -79,8 +105,11 @@ def load_eval_playlists(flat_path, assignment, splits, vocab, artist_ids=None):
     unseen = {}
     unseen_artists = {}
     playlists = {s: {} for s in splits}
+    progress = ReadProgress(flat_path, f"load {'/'.join(splits)}")
     with open(flat_path, "rb") as f:
-        for line in f:
+        for line_number, line in enumerate(f, 1):
+            if line_number % 100000 == 0:
+                progress.update(f.tell())
             pid, uri, _, artist = line.rstrip(b"\r\n").split(b"\t", 3)
             pid = int(pid)
             split = assignment[pid]
@@ -93,6 +122,7 @@ def load_eval_playlists(flat_path, assignment, splits, vocab, artist_ids=None):
                         if artist_ids is not None:
                             unseen_artists[item] = artist_ids.setdefault(artist, len(artist_ids))
                 playlists[split].setdefault(pid, array.array("i")).append(item)
+        progress.update(f.tell(), final=True)
     return playlists, unseen_artists
 
 
@@ -130,8 +160,13 @@ def evaluate(models, playlists, seed_sizes, max_playlists, seed=42, titles=None,
         cases = sample_cases(playlists, k, max_playlists, seed)
         for name, model in models.items():
             start = time.time()
+            last_log = time.monotonic()
+            print(f"[evaluate] {name}, k={k}: {len(cases):,} playlist", flush=True)
             values = {metric: [] for metric in METRICS}
-            for pid, seed_items, hidden in cases:
+            for case_index, (pid, seed_items, hidden) in enumerate(cases, 1):
+                if case_index % 25 == 0 and time.monotonic() - last_log >= 10:
+                    print(f"[evaluate] {name}, k={k}: {case_index}/{len(cases)}", flush=True)
+                    last_log = time.monotonic()
                 # R-precision chấm |hidden| gợi ý đầu nên cần danh sách đủ dài
                 n = max(TOP_N, len(hidden))
                 if getattr(model, "uses_title", False):
@@ -154,6 +189,10 @@ def evaluate(models, playlists, seed_sizes, max_playlists, seed=42, titles=None,
 
 
 def main():
+    import sys
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser()
     ap.add_argument("--flat", required=True)
     ap.add_argument("--split-file", required=True)
@@ -166,6 +205,8 @@ def main():
     ap.add_argument("--hybrid", nargs=2, type=float, metavar=("PLAYLIST_EXP", "TITLE_WEIGHT"),
                     help="thêm mô hình hybrid (cần --tuned và --titles) với tham số chọn từ tune_hybrid (trên val)")
     ap.add_argument("--titles", help="đầu ra recommender.hybrid.playlist_titles")
+    ap.add_argument("--als-model", help="bundle ALS từ train_als hoặc tune_als")
+    ap.add_argument("--cache-dir", help="cache train/val/test dùng lại giữa các lần chạy")
     ap.add_argument("--rerank", metavar="MODEL_PATH",
                     help="thêm hybrid_knn (Hybrid + User-User) và rerank (LightGBM xếp lại, file mô hình từ "
                          "recommender.rerank.train_reranker); cần --hybrid")
@@ -177,9 +218,11 @@ def main():
 
     start = time.time()
     assignment = read_assignment(args.split_file)
-    train = load_train(args.flat, assignment)
+    from recommender.evaluation.data_cache import load_train_cached, load_eval_cached
+    train = load_train_cached(args.flat, assignment, args.cache_dir)
     X, vocab = train.X, train.vocab
-    playlists, unseen_artists = load_eval_playlists(args.flat, assignment, args.splits, vocab, train.artist_ids)
+    playlists, unseen_artists = load_eval_cached(args.flat, assignment, args.splits, vocab,
+                                                train.artist_ids, args.cache_dir)
     print(f"Train: {X.shape[0]:,} playlist, {X.shape[1]:,} bài, {X.nnz:,} ô | {time.time() - start:.0f}s", flush=True)
 
     uri_counts = read_mapreduce_counts(args.popularity)
@@ -195,6 +238,10 @@ def main():
     popularity = PopularityRecommender(counts)
     cooccurrence = CooccurrenceRecommender.from_matrix(X, popularity)
     models = {"popularity": popularity, "cooccurrence": cooccurrence}
+    if args.als_model:
+        from recommender.als.load_als import load_als
+        from recommender.als.train_als import training_digest
+        models["als"] = load_als(args.als_model, popularity, vocab, training_digest(train))
     titles = None
     if args.tuned:
         seed_exp, item_exp, min_count = args.tuned
@@ -237,15 +284,18 @@ def main():
     for metric in METRICS:
         fields += [metric, f"{metric}_ci95"]
     fields.append("seconds")
-    with open(args.out, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
-        writer.writeheader()
-        for split in args.splits:
-            print(f"== {split}: {len(playlists[split]):,} playlist ==", flush=True)
-            for row in evaluate(models, playlists[split], SEED_SIZES, args.max_playlists,
-                                titles=titles, artist_of=artist_of):
-                writer.writerow({"split": split, **row})
-                f.flush()
+    def write(staged):
+        with staged.open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            for split in args.splits:
+                print(f"== {split}: {len(playlists[split]):,} playlist ==", flush=True)
+                for row in evaluate(models, playlists[split], SEED_SIZES, args.max_playlists,
+                                    titles=titles, artist_of=artist_of):
+                    writer.writerow({"split": split, **row})
+                    f.flush()
+    report = write_report(args.out, write)
+    print(f"[report] Báo cáo đánh giá: {report}", flush=True)
 
 
 if __name__ == "__main__":

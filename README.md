@@ -2,6 +2,13 @@
 
 Project structure for large-scale music ingestion, processing, recommendation, API, and dashboard workflows.
 
+## ALS
+
+Đã tích hợp Spark implicit ALS: train, tuning trên validation, cache/checkpoint,
+đánh giá chung và gợi ý qua API/dashboard. Hướng dẫn cài, smoke test và nạp
+bundle: [Chạy ALS local](docs/run_als_local.md). Dependency huấn luyện ở
+[requirements-als.txt](requirements-als.txt); API/dashboard chỉ cần dependency gốc.
+
 ---
 
 # Chạy nhanh bằng Docker

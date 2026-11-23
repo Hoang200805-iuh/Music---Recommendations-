@@ -26,6 +26,8 @@ services:
               "--server.headless=true", "--browser.gatherUsageStats=false"]
     environment:
       MUSIC_API_URL: http://api:8000
+    volumes:
+      - ./hdfs_sim/music/analytics/als:/app/als:ro
     ports:
       - "8501:8501"
     depends_on:
