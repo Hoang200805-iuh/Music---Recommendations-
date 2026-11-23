@@ -1,10 +1,12 @@
-# Chỉ gửi vào Docker những gì image cần: code và chỉ mục app.
-# Dữ liệu thô, file làm phẳng, đặc trưng huấn luyện (vài GB) không cần khi chạy.
+# Chỉ gửi vào Docker những gì image cần: code và mô hình LightGBM.
+# Dữ liệu (hdfs_sim/, data/) không nằm trong image: service setup dựng chỉ mục trong volume.
 **
 !docker/requirements.txt
+!docker/setup.sh
 !recommender/**
 !api/**
 !dashboard/**
-!hdfs_sim/music/analytics/app_index/**
+!src/**
+!models/reranker_lgbm.txt
 **/__pycache__
 **/*.pyc

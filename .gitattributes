@@ -1,0 +1,5 @@
+# Giữ nguyên xuống dòng LF dù checkout trên Windows (chạy trong container Linux)
+*.sh text eol=lf
+Dockerfile text eol=lf
+# File mô hình LightGBM: không đổi xuống dòng
+models/*.txt -text
