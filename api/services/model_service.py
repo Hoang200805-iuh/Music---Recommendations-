@@ -19,7 +19,7 @@ from recommender.rerank import build_features
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INDEX_DIR = ROOT / "hdfs_sim/music/analytics/app_index"
-DEFAULT_ALS_DIR = ROOT / "hdfs_sim/music/analytics/als"
+DEFAULT_ALS_DIR = ROOT / "outputs/als_local/models/als_implicit"
 
 # Tên mô hình trong API -> mô tả ngắn (trả về ở /health)
 DESCRIPTIONS = {

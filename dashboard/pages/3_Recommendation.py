@@ -18,7 +18,10 @@ from recommender.evaluation.recall_at_k import recall_at_k
 
 ROOT = Path(__file__).resolve().parents[2]
 INDEX_DIR = Path(os.environ.get("MUSIC_APP_INDEX", ROOT / "hdfs_sim/music/analytics/app_index"))
-ALS_DIR = Path(os.environ.get("MUSIC_ALS_DIR", ROOT / "hdfs_sim/music/analytics/als"))
+ALS_DIR = Path(os.environ.get(
+    "MUSIC_ALS_DIR",
+    ROOT / "outputs/als_local/models/als_implicit",
+))
 
 TOP_N = 10  # số bài hiện ra
 EVAL_N = 50  # số bài mô hình gợi ý để chấm Recall@50, giống evaluate_models

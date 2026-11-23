@@ -10,7 +10,7 @@ services:
       - "8000:8000"
     volumes:
       # Mô hình ALS đã xuất (không bắt buộc): thư mục trống thì API chạy không có mô hình als
-      - ./hdfs_sim/music/analytics/als:/app/als:ro
+        - ./outputs/als_local/models/als_implicit:/app/als:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -27,7 +27,7 @@ services:
     environment:
       MUSIC_API_URL: http://api:8000
     volumes:
-      - ./hdfs_sim/music/analytics/als:/app/als:ro
+      - ./outputs/als_local/models/als_implicit:/app/als:ro
     ports:
       - "8501:8501"
     depends_on:
