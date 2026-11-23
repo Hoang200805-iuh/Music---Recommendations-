@@ -4,6 +4,17 @@ Project structure for large-scale music ingestion, processing, recommendation, A
 
 ---
 
+# Chạy nhanh bằng Docker
+
+```bash
+docker compose up --build
+```
+
+Giao diện: http://localhost:8501 · API: http://localhost:8000/docs. Cần có chỉ mục app
+(`hdfs_sim/music/analytics/app_index`) trước khi build; chi tiết trong `docs/docker.md`.
+
+---
+
 # API, giao diện và thí nghiệm hiệu năng
 
 | Việc | Trạng thái | Code |

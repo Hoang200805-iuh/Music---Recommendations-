@@ -1,1 +1,34 @@
-services: {}
+# Chạy cả hệ thống bằng một lệnh (từ thư mục gốc repo):
+#     docker compose up --build
+# rồi mở http://localhost:8501 (giao diện) và http://localhost:8000/docs (API).
+# Cần dựng chỉ mục app trước (hdfs_sim/music/analytics/app_index), xem docs/docker.md.
+services:
+  api:
+    build: .
+    image: music-recommender:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mô hình ALS đã xuất (không bắt buộc): thư mục trống thì API chạy không có mô hình als
+      - ./hdfs_sim/music/analytics/als:/app/als:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+
+  dashboard:
+    build: .
+    image: music-recommender:latest  # cùng image với api, bước build thứ hai lấy hết từ cache
+    command: ["streamlit", "run", "dashboard/app.py", "--server.address=0.0.0.0", "--server.port=8501",
+              "--server.headless=true", "--browser.gatherUsageStats=false"]
+    environment:
+      MUSIC_API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
