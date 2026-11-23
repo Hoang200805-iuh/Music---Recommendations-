@@ -24,3 +24,6 @@ __pycache__/
 
 # Dataset MPD tải về (~25GB)
 archive(1)/
+
+# Cleaned MPD dataset (local data, not source code).
+music_clean_compact/

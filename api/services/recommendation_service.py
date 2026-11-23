@@ -11,6 +11,7 @@ Tạo gợi ý cho một request: đổi URI thành id bài, gọi mô hình, g�
 Bài được bù từ danh sách phổ biến vì mô hình không đủ bài có điểm có score = null, fallback = true.
 """
 from api.services.explain_service import Explainer
+import math
 from recommender.hybrid.hybrid_recommender import combine
 
 
@@ -26,6 +27,10 @@ def split_name(name):
 def _scored(service, model_name, seed, title, n):
     """(danh sách id bài, {id bài: điểm}) theo mô hình model_name."""
     model = service.models[model_name]
+    if model_name == "als":
+        scores = model.score(seed)
+        items = model.recommend(seed, n, scores)
+        return items, {i: float(scores[i]) for i in items if math.isfinite(scores[i])}
     if model_name == "popularity":
         items = model.recommend(seed, n)
         return items, {i: float(service.counts[i]) for i in items}

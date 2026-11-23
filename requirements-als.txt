@@ -1,0 +1,4 @@
+# Tách riêng vì các mô hình cũ không cần Spark/JVM.
+-r requirements.txt
+# Pin Spark separately so API/dashboard dependencies stay unchanged.
+pyspark==4.1.1
