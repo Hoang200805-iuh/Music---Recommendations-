@@ -190,6 +190,92 @@ Thời gian và RAM trên laptop 16GB: đánh giá 10.000 playlist mỗi k (3 m�
 | `reports/week2_tuning_hybrid_val.csv` | 20 bộ tham số Hybrid trên val |
 | `reports/eda_charts/` | Biểu đồ EDA (`src/eda_charts.py`) |
 
+## ALS implicit — Spark MLlib
+
+**Chạy local bằng một lệnh:** `python scripts/run_als_local.py`.
+Script kiểm tra Spark trước, đọc trực tiếp input của dự án trên D và lưu kết quả
+vào `outputs/als_local`, rồi tuning và so sánh 5 mô hình. Có log tiến độ, cache và checkpoint để
+tiếp tục khi chạy lại. Xem [`docs/run_als_local.md`](docs/run_als_local.md).
+
+`recommender/als/` bổ sung mô hình `pyspark.ml.recommendation.ALS` với
+`implicitPrefs=True`: mỗi playlist là một user, mỗi bài là một item, mỗi cặp
+playlist–bài phân biệt có `rating=1`. Chỉ dùng tương tác train để học factors.
+`maxIter=10` được giữ cố định.
+
+`tune_als.py` chỉnh **từng tham số một** trên validation, không thử lưới 27 tổ hợp:
+
+| Bước | Giá trị thử | Các tham số giữ cố định |
+|---|---|---|
+| 1. `rank` | 20, 50, 100 | `regParam=0.1`, `alpha=10` |
+| 2. `regParam` | 0.01, 0.1, 1 | rank tốt nhất bước 1, `alpha=10` |
+| 3. `alpha` | 1, 10, 40 | rank và regParam tốt nhất ở hai bước trước |
+
+Chọn theo **NDCG@10 trung bình ở k=1,5,25**, cùng cách lấy seed và lấy mẫu như
+Co-occurrence. Khi hòa điểm, giữ tham số hiện tại (ban đầu `50, 0.1, 10`).
+Các cấu hình trùng được tái sử dụng, nên có 7 lần train khác nhau. CSV ghi đủ
+3 ứng viên mỗi bước, với `selected`, `reused`, thời gian train và các độ đo.
+
+Do chia tập theo playlist, playlist validation/test là user chưa gặp. Khi đánh giá,
+giữ nguyên item factors đã học từ train và **fold-in vector playlist chỉ từ seed**,
+theo confidence `1+alpha` và regularization ALS-WR của Spark. Không dùng hidden
+để học factors, không loại playlist cold-start khỏi đánh giá. Với k=0 hoặc seed
+toàn bài chưa gặp, dùng cùng Popularity fallback như Co-occurrence. ALS không dùng tên.
+
+Cần PySpark và Java tương thích (Java 17 là lựa chọn dùng được với Spark 3.5/4.x).
+Chạy từ thư mục gốc bằng PowerShell:
+
+```powershell
+$env:PYTHONUTF8 = '1'
+python -m pip install -r requirements-als.txt
+
+$common = @(
+    '--flat', 'hdfs_sim/music/processed/playlist_tracks_flat.tsv',
+    '--split-file', 'hdfs_sim/music/processed/playlist_split.tsv',
+    '--popularity', 'hdfs_sim/music/analytics/track_popularity_train/part-00000'
+)
+
+# Tìm tham số trên validation và lưu bundle tốt nhất.
+python -m recommender.als.tune_als @common `
+    --out reports/als_tuning_val.csv --model-out models/als_implicit `
+    --max-playlists 1000 --master 'local[4]' --driver-memory 4g `
+    --cache-dir outputs/als_cache --checkpoint-dir outputs/als_checkpoints
+
+# Đánh giá cùng các mô hình cũ trên cùng 10.000 playlist test mỗi mức seed.
+python -m recommender.evaluation.evaluate_models @common `
+    --titles hdfs_sim/music/processed/playlist_titles.tsv `
+    --tuned 0.5 0.25 10 --hybrid 1.0 0.1 `
+    --als-model models/als_implicit --max-playlists 10000 `
+    --cache-dir outputs/als_cache `
+    --out reports/results_with_als.csv
+```
+
+CSV so sánh có các dòng `popularity`, `cooccurrence`, `cooccurrence_tuned`,
+`hybrid`, `als`, cùng Recall@10/50, NDCG@10, Precision@10, Hit Rate@10,
+R-precision và khoảng tin cậy 95%, ở k=0,1,5,25. Chưa có số liệu ALS thực nghiệm
+trên toàn MPD; các lệnh trên tạo báo cáo đó.
+
+Bundle gồm `item_factors.npy`, `items.tsv`, `metadata.json`. Metadata lưu tham số,
+điểm validation và fingerprint của vocabulary/tương tác train; đánh giá từ chối
+bundle học trên train khác. Nạp bundle để đánh giá không cần khởi động Spark.
+`train_als.py` hỗ trợ train một bộ tham số cụ thể và `--save-spark-model` để lưu
+thêm ALSModel gốc (cả user/item factors).
+
+Khi tuning local, mỗi trial chạy trong một Python/JVM riêng, ghi và cache TSV rating nhị phân của trial đó. Khi trial kết thúc, tiến trình thoát và thư mục tạm riêng được dọn trước trial tiếp theo; cache dữ liệu và checkpoint vẫn được giữ để tiếp tục khi chạy lại.
+Cần đủ dung lượng đĩa cho TSV/Spark shuffle và RAM cho item factors: khoảng
+`4 × số bài × rank` byte, chưa tính Spark/ma trận train. `--temp-dir` đổi chỗ lưu
+TSV. Với master từ xa, thư mục này phải được mount cùng đường dẫn trên mọi executor.
+
+Kiểm thử:
+
+```powershell
+python -m pytest tests/test_als.py tests/test_evaluation.py tests/test_recommender.py -q
+$env:RUN_SPARK_TESTS = '1'
+python -m pytest tests/test_als.py -k real_spark -q
+```
+
+Tham khảo: [Spark collaborative filtering](https://spark.apache.org/docs/latest/ml-collaborative-filtering.html)
+(implicit feedback, ALS-WR và cold-start).
+
 ---
 
 # Tuần 1 — Người A: Môi trường, dữ liệu, MapReduce

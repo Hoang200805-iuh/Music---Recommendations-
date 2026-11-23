@@ -1,0 +1,3 @@
+# Tách riêng vì các mô hình cũ không cần Spark/JVM.
+-r requirements.txt
+pyspark>=3.5,<4.2
