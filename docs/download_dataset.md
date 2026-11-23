@@ -45,7 +45,6 @@ cd mapreduce && ./run_popularity_job.sh
 ```
 
 Lưu ý: với 1.000 file/1 triệu playlist, bước `flatten_for_mapreduce.py` (thuần
-Python, đọc từng file) sẽ chậm — chỉ dùng để ra input test cho MapReduce job
-của tuần 1. Việc làm phẳng "thật" bằng PySpark (có thể chạy song song, xử lý
-được khối lượng này nhanh hơn nhiều) là phần việc của Người B, sẽ thay thế
-script tạm này ở tuần 2.
+Python, đọc từng file, một tiến trình) khá chậm. Bước làm phẳng bằng
+PySpark (chạy song song, xử lý khối lượng này nhanh hơn nhiều) có thể thay thế
+script này, miễn là xuất đúng định dạng 4 cột ở trên.
