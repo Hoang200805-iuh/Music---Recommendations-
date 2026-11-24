@@ -109,7 +109,11 @@ def test_als_rows_follow_uris_not_file_order(tmp_path):
     assert np.allclose(als.factors[als.rows[2]], FACTORS[2])
 
 
-def test_service_without_als_or_reranker(tmp_path):
+def test_service_without_als_or_reranker(tmp_path, monkeypatch):
+    from recommender import app_index
+
+    # Không có mô hình LightGBM ở cả thư mục chỉ mục lẫn trong repo
+    monkeypatch.setattr(app_index, "REPO_RERANKER", tmp_path / "missing.txt")
     _build(tmp_path)
     service = ModelService(tmp_path / "index", tmp_path / "no_als")
     assert service.missing == ["als", "rerank"] and service.default_model == "hybrid"
