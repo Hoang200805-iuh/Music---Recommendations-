@@ -19,7 +19,7 @@ docker compose up --build
 
 Giao diện: http://localhost:8501 · API: http://localhost:8000/docs. Máy mới clone về: giải nén gói dữ liệu
 của nhóm (4 file trong `hdfs_sim/music/`) vào thư mục gốc repo trước, lần chạy đầu tự dựng chỉ mục trong
-khoảng 3 phút. Thêm ALS, chạy không dùng Docker: `docs/docker.md`.
+khoảng 10–15 phút. Thêm ALS, chạy không dùng Docker: `docs/docker.md`.
 
 ---
 

@@ -6,7 +6,7 @@
 #   1. Volume đã có chỉ mục khớp dữ liệu: bỏ qua.
 #   2. Máy đã dựng sẵn chỉ mục khớp dữ liệu (hdfs_sim/music/analytics/app_index): chép vào volume.
 #   3. Máy có 4 file đầu vào (hdfs_sim/music/processed/*.tsv và track_popularity_train/part-00000,
-#      ví dụ giải nén từ gói dữ liệu của nhóm): dựng chỉ mục từ đó, khoảng 3 phút.
+#      ví dụ giải nén từ gói dữ liệu của nhóm): dựng chỉ mục từ đó, khoảng 10–15 phút.
 #   4. Chỉ có dữ liệu MPD gốc (gắn vào $MPD): chạy cả pipeline như README, khoảng 30 phút.
 # "Khớp dữ liệu": số playlist train trong chỉ mục bằng số playlist train của file chia tập (nếu có file
 # này), để không dùng nhầm chỉ mục dựng từ bộ dữ liệu hoặc cách chia khác.
@@ -58,7 +58,7 @@ elif index_ok "$SEED/analytics/app_index"; then
   cp -r "$SEED/analytics/app_index/." "$INDEX.tmp/"
   rm -rf "$INDEX" && mv "$INDEX.tmp" "$INDEX"
 elif [ -f "$SEED/$FLAT" ] && [ -f "$SEED/$SPLIT" ] && [ -f "$SEED/$TITLES" ] && [ -f "$SEED/$POPULARITY" ]; then
-  log "Dựng chỉ mục từ 4 file đầu vào trên máy (hdfs_sim/music), khoảng 3 phút..."
+  log "Dựng chỉ mục từ 4 file đầu vào trên máy (hdfs_sim/music), khoảng 10–15 phút..."
   mkdir -p "$DATA/analytics"
   build_index "$SEED"
 elif ls "$MPD"/mpd.slice.*.json >/dev/null 2>&1; then

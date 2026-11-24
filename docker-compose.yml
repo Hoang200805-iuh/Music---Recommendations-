@@ -3,7 +3,7 @@
 # rồi mở http://localhost:8501 (giao diện) và http://localhost:8000/docs (API).
 #
 # Lần đầu, service setup chuẩn bị chỉ mục trong volume music_data (xem docker/setup.sh): chép chỉ mục
-# đã dựng sẵn trên máy, hoặc dựng từ 4 file đầu vào trong hdfs_sim/music (khoảng 3 phút), hoặc từ dữ liệu
+# đã dựng sẵn trên máy, hoặc dựng từ 4 file đầu vào trong hdfs_sim/music (khoảng 10–15 phút), hoặc từ dữ liệu
 # MPD gốc ở data/raw/ hay MPD_DATA_DIR (khoảng 30 phút). Các lần sau setup bỏ qua ngay. Chi tiết: docs/docker.md.
 x-app: &app
   build: .

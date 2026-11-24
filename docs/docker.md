@@ -18,7 +18,7 @@ Dừng: `Ctrl+C`, hoặc `docker compose down` nếu chạy nền (`docker compo
 Dữ liệu MPD không được chia sẻ công khai (`docs/mpd_terms_of_use.md`) nên không có trên git. Lần chạy
 đầu, service `setup` tự dựng chỉ mục của app từ một trong hai nguồn:
 
-1. **Gói dữ liệu của nhóm** (cách nhanh, khoảng 3 phút): giải nén vào **thư mục gốc repo** để có đủ 4 file
+1. **Gói dữ liệu của nhóm** (cách nhanh, khoảng 10–15 phút): giải nén vào **thư mục gốc repo** để có đủ 4 file
 
    ```
    hdfs_sim/music/processed/playlist_tracks_flat.tsv
@@ -181,6 +181,9 @@ streamlit run dashboard/app.py --server.address 127.0.0.1     # cửa sổ 2
 Đo trên Docker Desktop (Windows 11, WSL2, máy ảo Docker 16 CPU, 7,9GB RAM):
 
 - Image khoảng 1GB (Python và thư viện, không có dữ liệu).
+- Máy mới với gói dữ liệu của nhóm: `setup` dựng chỉ mục mất 11 phút (phần lớn là đọc file 3,7GB
+  qua thư mục chia sẻ của Docker Desktop), RAM cao nhất 1,4GB; chỉ mục dựng ra giống hệt từng byte
+  với chỉ mục trên máy đã dùng để đánh giá.
 - Máy đã có chỉ mục: `docker compose up --build` đến khi cả hệ thống chạy khoảng 40 giây
   (chép 530MB chỉ mục vào volume 15 giây); các lần sau khoảng 20 giây.
 - RAM khi chạy: API khoảng 400MB; dashboard khoảng 55MB khi chưa ai mở, tăng thêm vài trăm MB khi mở trang
