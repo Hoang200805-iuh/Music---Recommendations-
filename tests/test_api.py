@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from api.services.model_service import ModelService
-from recommender.als.load_als import ALSRecommender
+from recommender.als.serving_als import ALSRecommender
 from recommender.popularity.popularity_recommender import PopularityRecommender
 from recommender.rerank.features import FEATURE_NAMES
 from test_app_index import _build

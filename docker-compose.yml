@@ -2,9 +2,9 @@
 #     docker compose up --build
 # rồi mở http://localhost:8501 (giao diện) và http://localhost:8000/docs (API).
 #
-# Lần đầu, service setup chuẩn bị chỉ mục trong volume music_data (xem docker/setup.sh):
-# chép chỉ mục đã dựng sẵn trên máy nếu có, nếu không thì dựng từ dữ liệu MPD gốc đặt ở data/raw/
-# (hoặc thư mục MPD_DATA_DIR), khoảng 30 phút. Các lần sau setup bỏ qua ngay. Chi tiết: docs/docker.md.
+# Lần đầu, service setup chuẩn bị chỉ mục trong volume music_data (xem docker/setup.sh): chép chỉ mục
+# đã dựng sẵn trên máy, hoặc dựng từ 4 file đầu vào trong hdfs_sim/music (khoảng 3 phút), hoặc từ dữ liệu
+# MPD gốc ở data/raw/ hay MPD_DATA_DIR (khoảng 30 phút). Các lần sau setup bỏ qua ngay. Chi tiết: docs/docker.md.
 x-app: &app
   build: .
   image: music-recommender:latest
@@ -19,7 +19,7 @@ services:
     command: ["bash", "docker/setup.sh"]
     volumes:
       - music_data:/app/hdfs_sim/music
-      - ./hdfs_sim/music/analytics/app_index:/seed/app_index:ro
+      - ./hdfs_sim/music:/seed/music:ro
       - ${MPD_DATA_DIR:-./data/raw}:/data/mpd:ro
 
   api:
@@ -43,6 +43,7 @@ services:
               "--server.headless=true", "--browser.gatherUsageStats=false"]
     environment:
       MUSIC_API_URL: http://api:8000
+    # Volume chỉ mục và bundle ALS lấy từ x-app: không khai báo volumes riêng ở đây (sẽ ghi đè mất volume chỉ mục)
     ports:
       - "8501:8501"
     depends_on:

@@ -2,6 +2,13 @@
 
 Project structure for large-scale music ingestion, processing, recommendation, API, and dashboard workflows.
 
+## ALS
+
+Đã tích hợp Spark implicit ALS: train, tuning trên validation, cache/checkpoint,
+đánh giá chung và gợi ý qua API/dashboard. Hướng dẫn cài, smoke test và nạp
+bundle: [Chạy ALS local](docs/run_als_local.md). Dependency huấn luyện ở
+[requirements-als.txt](requirements-als.txt); API/dashboard chỉ cần dependency gốc.
+
 ---
 
 # Chạy nhanh bằng Docker
@@ -10,8 +17,9 @@ Project structure for large-scale music ingestion, processing, recommendation, A
 docker compose up --build
 ```
 
-Giao diện: http://localhost:8501 · API: http://localhost:8000/docs. Cần có chỉ mục app
-(`hdfs_sim/music/analytics/app_index`) trước khi build; chi tiết trong `docs/docker.md`.
+Giao diện: http://localhost:8501 · API: http://localhost:8000/docs. Máy mới clone về: giải nén gói dữ liệu
+của nhóm (4 file trong `hdfs_sim/music/`) vào thư mục gốc repo trước, lần chạy đầu tự dựng chỉ mục trong
+khoảng 3 phút. Thêm ALS, chạy không dùng Docker: `docs/docker.md`.
 
 ---
 

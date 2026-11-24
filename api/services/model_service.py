@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from recommender import app_index
-from recommender.als.load_als import load_als
+from recommender.als.serving_als import load_als
 from recommender.neighbors.user_knn_recommender import UserKNNRecommender
 from recommender.rerank import build_features
 

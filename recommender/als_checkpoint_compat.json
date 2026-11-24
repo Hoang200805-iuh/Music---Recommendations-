@@ -1,0 +1,47 @@
+{
+  "format_version": 1,
+  "versions": [
+    {
+      "name": "portable-v1",
+      "legacy_code_sha256": "738e639d86f94ed5792388b8beb2eb3cd7a59fa94de179b70ac80ee54b998140",
+      "algorithm_sha256": "efcfdea7af7456830e5d7f530424a812c5571aeb92d9f25e5695a2caa41a023b",
+      "source_sha256": {
+        "als/load_als.py": "b27e88a5ef6abe9bb0be560ce9d034cb756a648d4fb6edd3b2a734646449d366",
+        "als/recommend_als.py": "b6cd09f3bf116aa77edfdc8c5bc13376c45554533d0d8b3692ff3ee36811354f",
+        "als/train_als.py": "378ef160136288ae0c61ef2aa3c49c4ad48279246f23255465d575d67a9abeec",
+        "als/tune_als.py": "35108ae0527f2ac112579e9f5c53055c4665e5a12025333adffe2ef85e3c3de1",
+        "evaluation/data_cache.py": "160508accf43379d044f527f1504c395c98d3d7271e4de77e5f5292500ea34a5",
+        "evaluation/evaluate_models.py": "8fd03b12973cf05831cf2a7f1eead54487db041c1116a82262e490a4e8d174a2",
+        "evaluation/hit_rate_at_k.py": "92a495371d604a3bbeb4781c27327a7306529fc354d02c2780e44ea044b0043c",
+        "evaluation/ndcg_at_k.py": "dcf4e83f63406102630bc1d7a5f1661dd4bb467e23e4d77d4ca01eb6ecd8d946",
+        "evaluation/precision_at_k.py": "259f724d880bfdf4af36f9e896d764a71e45a1d3367c928c1a3d422864860b85",
+        "evaluation/r_precision.py": "f9ee897033345b154749bbbe55501118e16f9c7b83d74bc7ac958d9573f7b301",
+        "evaluation/recall_at_k.py": "1b2a316e075e3b2b012b2eaafebcc39cd837fc0e147fbd6ac93a2cebef032590",
+        "evaluation/split_playlists.py": "9ac25755839338c1937fa2521316a5fc7502edc0f217c5db56348b4462b576f5",
+        "popularity/popularity_recommender.py": "6a4f8be6f48f0866e75d12c47dcb996d65c8e138e341d7d3e9751e3fb57c4c31"
+      }
+    },
+    {
+      "name": "project-v1",
+      "legacy_code_sha256": "2828e78d1b7c06d53b1b6434d88817fe2ca1bcd60d6a4cecc3736c8812386488",
+      "algorithm_sha256": "efcfdea7af7456830e5d7f530424a812c5571aeb92d9f25e5695a2caa41a023b",
+      "source_sha256": {
+        "als/load_als.py": "b27e88a5ef6abe9bb0be560ce9d034cb756a648d4fb6edd3b2a734646449d366",
+        "als/recommend_als.py": "b6cd09f3bf116aa77edfdc8c5bc13376c45554533d0d8b3692ff3ee36811354f",
+        "als/train_als.py": "378ef160136288ae0c61ef2aa3c49c4ad48279246f23255465d575d67a9abeec",
+        "als/tune_als.py": "35108ae0527f2ac112579e9f5c53055c4665e5a12025333adffe2ef85e3c3de1",
+        "evaluation/data_cache.py": "160508accf43379d044f527f1504c395c98d3d7271e4de77e5f5292500ea34a5",
+        "evaluation/evaluate_models.py": "8fd03b12973cf05831cf2a7f1eead54487db041c1116a82262e490a4e8d174a2",
+        "evaluation/hit_rate_at_k.py": "92a495371d604a3bbeb4781c27327a7306529fc354d02c2780e44ea044b0043c",
+        "evaluation/ndcg_at_k.py": "dcf4e83f63406102630bc1d7a5f1661dd4bb467e23e4d77d4ca01eb6ecd8d946",
+        "evaluation/precision_at_k.py": "259f724d880bfdf4af36f9e896d764a71e45a1d3367c928c1a3d422864860b85",
+        "evaluation/r_precision.py": "f9ee897033345b154749bbbe55501118e16f9c7b83d74bc7ac958d9573f7b301",
+        "evaluation/recall_at_k.py": "1b2a316e075e3b2b012b2eaafebcc39cd837fc0e147fbd6ac93a2cebef032590",
+        "evaluation/split_playlists.py": "9ac25755839338c1937fa2521316a5fc7502edc0f217c5db56348b4462b576f5",
+        "evaluation/tune_cooccurrence.py": "98de30018a7fed3148e36650e15010baf4a06cbbad6a6390002d1fa8f3e6ed9a",
+        "evaluation/tune_hybrid.py": "fdebf237147363efca9bbfc1d7edf294f341c7cff2544c7ea547e32060536779",
+        "popularity/popularity_recommender.py": "6a4f8be6f48f0866e75d12c47dcb996d65c8e138e341d7d3e9751e3fb57c4c31"
+      }
+    }
+  ]
+}
