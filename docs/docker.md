@@ -1,10 +1,51 @@
 # Chạy bằng Docker
 
-## Train/tuning ALS trước khi chạy Docker (PowerShell)
+Cả hệ thống (API + giao diện) chạy bằng **một lệnh** từ thư mục gốc repo:
 
-Image Docker hiện tại phục vụ API/dashboard, không chứa Spark/Java để train.
-Dữ liệu Parquet đã được chuẩn bị thành bốn file trong `hdfs_sim/music`.
-Trên máy hiện tại đã có `.venv` và dependency; không cần tạo lại môi trường.
+```bash
+docker compose up --build
+```
+
+Rồi mở:
+
+- Giao diện: http://localhost:8501 (trang "So sánh mô hình" và "Gợi ý qua API")
+- API: http://localhost:8000/docs (thử request trên trình duyệt), http://localhost:8000/health
+
+Dừng: `Ctrl+C`, hoặc `docker compose down` nếu chạy nền (`docker compose up --build -d`).
+
+## Lần đầu trên máy mới: chuẩn bị dữ liệu
+
+Dữ liệu MPD không được chia sẻ công khai (`docs/mpd_terms_of_use.md`) nên không có trên git. Lần chạy
+đầu, service `setup` tự dựng chỉ mục của app từ một trong hai nguồn:
+
+1. **Gói dữ liệu của nhóm** (cách nhanh, khoảng 10–15 phút): giải nén vào **thư mục gốc repo** để có đủ 4 file
+
+   ```
+   hdfs_sim/music/processed/playlist_tracks_flat.tsv
+   hdfs_sim/music/processed/playlist_split.tsv
+   hdfs_sim/music/processed/playlist_titles.tsv
+   hdfs_sim/music/analytics/track_popularity_train/part-00000
+   ```
+
+   Cùng 4 file thì chỉ mục dựng ra giống hệt từng byte trên mọi máy (kể cả 500 playlist mẫu của tab
+   "Thử trên playlist có thật"), nên giao diện và gợi ý giống hệt nhau.
+2. **Dữ liệu MPD gốc** (khoảng 30 phút): đặt các file `mpd.slice.*.json` vào `data/raw/`, hoặc chỉ đường dẫn
+   bằng `MPD_DATA_DIR` (`$env:MPD_DATA_DIR="D:\mpd\data"` trong PowerShell) rồi chạy lệnh trên.
+
+Các lần sau `setup` bỏ qua ngay vì chỉ mục đã nằm trong volume `music_data`. Nếu đổi sang bộ dữ liệu hoặc
+cách chia khác, `setup` tự nhận ra (số playlist train trong chỉ mục khác file chia tập) và dựng lại; muốn
+xóa hẳn: `docker compose down -v`.
+
+Mô hình **LightGBM** (`models/reranker_lgbm.txt`) có sẵn trên git, đã huấn luyện trên đúng cách chia của
+4 file trên (550.900 / 118.050 / 118.050 playlist), nên không cần huấn luyện lại. File chỉ chứa các cây
+quyết định, không chứa bài hát hay playlist nào.
+
+## Thêm mô hình ALS (không bắt buộc)
+
+Image Docker chỉ phục vụ API/dashboard, không chứa Spark/Java để train. ALS được train một lần bên ngoài
+Docker trên **cùng 4 file đầu vào** ở trên (để so được với các mô hình khác), rồi chép bundle vào
+`hdfs_sim/music/analytics/als/`. Chi tiết cài đặt, cache/checkpoint: [Chạy ALS local](run_als_local.md).
+Không chạy `src/prepare_compact_mpd.py` khi đã dùng gói dữ liệu của nhóm (bước đó tạo bộ dữ liệu khác).
 
 **1. Vào project và kiểm tra môi trường/input:**
 
@@ -26,7 +67,7 @@ Khi thấy `LOCAL_CHECK_OK` thì chạy bước tiếp theo. Dùng trực tiếp
     --val-playlists 1000 --test-playlists 10000
 ```
 
-Lệnh này huấn luyện trên toàn bộ **693.000 playlist train**. Số 1.000 và 10.000
+Lệnh này huấn luyện trên toàn bộ **550.900 playlist train**. Số 1.000 và 10.000
 chỉ giới hạn playlist đánh giá ở mỗi mức seed, không thu nhỏ tập train.
 Tuner thử `rank` (20, 50, 100), rồi `regParam` (0.01, 0.1, 1), rồi `alpha`
 (1, 10, 40): tổng 7 cấu hình khác nhau, mỗi cấu hình 10 vòng lặp. Chọn theo
@@ -87,96 +128,64 @@ kê nếu muốn dùng cùng checkpoint; thay heap 4g → 2g không đổi finge
 
 Tham khảo [Microsoft: pagefile và giới hạn commit của Windows](https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/how-to-determine-the-appropriate-page-file-size-for-64-bit-versions-of-windows).
 
-**3. Dựng chỉ mục từ cùng bộ dữ liệu và chép bundle ALS:**
+
+**3. Chép bundle ALS rồi chạy lại:**
 
 ```powershell
-.\.venv\Scripts\python.exe -X utf8 -m recommender.app_index `
-    --flat hdfs_sim/music/processed/playlist_tracks_flat.tsv `
-    --split-file hdfs_sim/music/processed/playlist_split.tsv `
-    --popularity hdfs_sim/music/analytics/track_popularity_train/part-00000 `
-    --titles hdfs_sim/music/processed/playlist_titles.tsv `
-    --out hdfs_sim/music/analytics/app_index
-
 $alsBundle = 'outputs/als_local/models/als_implicit'
 $alsTarget = 'hdfs_sim/music/analytics/als'
 New-Item -ItemType Directory -Force $alsTarget | Out-Null
 Copy-Item "$alsBundle/item_factors.npy", "$alsBundle/items.tsv", "$alsBundle/metadata.json" -Destination $alsTarget -Force
+docker compose up --build -d      # lần đầu; nếu đang chạy thì: docker compose restart api dashboard
 ```
 
-Chỉ mục app chưa có trên máy hiện tại nên cần dựng trước khi build Docker.
-LightGBM là tùy chọn: chỉ chép `reranker_lgbm.txt` nếu đã train lại trên đúng
-bộ dữ liệu/split này; không chép model cũ sang chỉ mục mới.
-
-**4. Build và mở ứng dụng:**
-
-```powershell
-docker compose up --build -d
-```
-
-Mở http://localhost:8000/health: trường `models` phải có `als`,
-`n_als_tracks` lớn hơn 0. Mở http://localhost:8501 và chọn mô hình ALS khi
-gọi API, hoặc xem ô ALS trong trang so sánh. API và dashboard đều được mount
-bundle từ cùng thư mục. Khi chỉ đổi bundle, dùng:
-
-```powershell
-docker compose restart api dashboard
-```
-
-Chi tiết cache/checkpoint và các CLI riêng: [Chạy ALS local](run_als_local.md).
-
-## Chạy dịch vụ
-
-Cả hệ thống (API + giao diện) chạy bằng **một lệnh** từ thư mục gốc repo:
-
-```bash
-docker compose up --build
-```
-
-Rồi mở:
-
-- Giao diện: http://localhost:8501 (trang "So sánh mô hình" và "Gợi ý qua API")
-- API: http://localhost:8000/docs (thử request trên trình duyệt), http://localhost:8000/health
-
-Dừng: `Ctrl+C`, hoặc `docker compose down` nếu chạy nền bằng `docker compose up --build -d`.
+Mở http://localhost:8000/health: trường `models` phải có `als`, `n_als_tracks` lớn hơn 0. Trang
+"So sánh mô hình" có thêm ô ALS; trang "Gợi ý qua API" có thêm mô hình `als`. Bundle được gắn vào cả API
+và dashboard lúc chạy, không cần build lại image.
 
 ## Gồm những gì
 
-| Service | Cổng | Lệnh | Ghi chú |
-|---|---|---|---|
-| `api` | 8000 | `uvicorn api.main:app` | Nạp chỉ mục và mô hình lúc khởi động (khoảng 5–10 giây), có healthcheck `/health` |
-| `dashboard` | 8501 | `streamlit run dashboard/app.py` | Chỉ khởi động sau khi API báo sẵn sàng; gọi API qua `http://api:8000` |
+| Service | Cổng | Việc |
+|---|---|---|
+| `setup` | | Chuẩn bị chỉ mục trong volume `music_data` (`docker/setup.sh`), rồi thoát |
+| `api` | 8000 | `uvicorn api.main:app`, có healthcheck `/health`; chạy sau khi `setup` xong |
+| `dashboard` | 8501 | `streamlit run dashboard/app.py`; chạy sau khi API sẵn sàng, gọi API qua `http://api:8000` |
 
-Hai service dùng chung một image (`Dockerfile`, Python 3.12, thư viện trong `docker/requirements.txt`
-cùng phiên bản với lúc huấn luyện). Không có Spark trong image.
+`setup` (`docker/setup.sh`) làm theo thứ tự:
 
-## Cần có trước khi build
+1. Volume đã có chỉ mục khớp dữ liệu: bỏ qua.
+2. Máy đã dựng sẵn chỉ mục khớp dữ liệu ở `hdfs_sim/music/analytics/app_index/`: chép vào volume.
+3. Máy có 4 file đầu vào trong `hdfs_sim/music/`: dựng chỉ mục từ đó.
+4. Chỉ có dữ liệu MPD gốc: chạy pipeline như README (làm phẳng → chia tập → MapReduce mapper/sort/reducer
+   trên train → tên playlist → dựng chỉ mục), xong thì xóa file làm phẳng tạm (3,7GB).
 
-Image chứa sẵn **chỉ mục app** `hdfs_sim/music/analytics/app_index/` (khoảng 530MB, gồm cả mô hình LightGBM
-`reranker_lgbm.txt`). Thư mục này không có trên git (dữ liệu MPD), nên máy mới cần dựng một lần theo
-README ("Cách chạy lại", bước 1–3 và 7):
+Cả ba service dùng chung một image (`Dockerfile`, Python 3.12, thư viện trong `docker/requirements.txt`
+cùng phiên bản với lúc huấn luyện), không có Spark. Chỉ mục nằm trong volume chứ không gắn thẳng thư mục
+trên máy, vì API đọc nó bằng memory-map: đọc qua thư mục chia sẻ từ Windows/macOS vào container chậm
+hơn nhiều.
+
+## Chạy không dùng Docker
 
 ```bash
+pip install -r requirements.txt
 python -m recommender.app_index --flat hdfs_sim/music/processed/playlist_tracks_flat.tsv \
     --split-file hdfs_sim/music/processed/playlist_split.tsv \
     --popularity hdfs_sim/music/analytics/track_popularity_train/part-00000 \
     --titles hdfs_sim/music/processed/playlist_titles.tsv --out hdfs_sim/music/analytics/app_index
-cp hdfs_sim/music/analytics/rerank_features/reranker_lgbm.txt hdfs_sim/music/analytics/app_index/
+uvicorn api.main:app --port 8000                              # cửa sổ 1
+streamlit run dashboard/app.py --server.address 127.0.0.1     # cửa sổ 2
 ```
-
-Chỉ mục được chép vào image thay vì gắn từ máy ngoài vì API đọc nó bằng memory-map: đọc qua thư mục
-chia sẻ từ Windows/macOS vào container chậm hơn nhiều. Dựng lại chỉ mục thì chạy lại `docker compose up --build`.
-
-Mô hình **ALS** (không bắt buộc) được gắn từ `hdfs_sim/music/analytics/als/` lúc chạy, không cần build lại:
-chép `item_factors.npy`, `items.tsv`, `metadata.json` vào đó (hoặc định dạng cũ
-`item_factors.npy` + `track_uris.txt`, xem `docs/api.md`) rồi khởi động lại API/dashboard.
 
 ## Tài nguyên
 
-Đo trên Docker Desktop (Windows 11, WSL2):
+Đo trên Docker Desktop (Windows 11, WSL2, máy ảo Docker 16 CPU, 7,9GB RAM):
 
-- Image 1,89GB (Python và thư viện khoảng 1,3GB, chỉ mục 530MB). Build lần đầu vài phút, các lần sau chỉ
-  chép lại phần code đã đổi.
-- `docker compose up` đến khi cả hai service chạy: khoảng 20 giây (API nạp chỉ mục, healthcheck báo sẵn sàng).
-- RAM: API khoảng 400MB; dashboard khoảng 55MB khi chưa ai mở, tăng thêm vài trăm MB khi mở trang
+- Image khoảng 1GB (Python và thư viện, không có dữ liệu).
+- Máy mới với gói dữ liệu của nhóm: `setup` dựng chỉ mục mất 11 phút (phần lớn là đọc file 3,7GB
+  qua thư mục chia sẻ của Docker Desktop), RAM cao nhất 1,4GB; chỉ mục dựng ra giống hệt từng byte
+  với chỉ mục trên máy đã dùng để đánh giá.
+- Máy đã có chỉ mục: `docker compose up --build` đến khi cả hệ thống chạy khoảng 40 giây
+  (chép 530MB chỉ mục vào volume 15 giây); các lần sau khoảng 20 giây.
+- RAM khi chạy: API khoảng 400MB; dashboard khoảng 55MB khi chưa ai mở, tăng thêm vài trăm MB khi mở trang
   "So sánh mô hình" (trang này tự đọc chỉ mục, không qua API).
 - Một request `/recommend` với mô hình LightGBM: khoảng 0,15–0,4 giây.

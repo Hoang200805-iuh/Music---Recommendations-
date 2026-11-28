@@ -299,13 +299,20 @@ def load(index_dir):
     }
 
 
+# Mô hình LightGBM có sẵn trong repo, dùng khi thư mục chỉ mục không có bản riêng
+REPO_RERANKER = Path(__file__).resolve().parents[1] / "models" / "reranker_lgbm.txt"
+
+
 def load_reranker(index_dir, cooccurrence, titles, artists, unseen_artists):
-    """Mô hình xếp hạng lại nếu có reranker_lgbm.txt và đã cài lightgbm, ngược lại None."""
-    model_path = Path(index_dir) / "reranker_lgbm.txt"
+    """Mô hình xếp hạng lại nếu đã cài lightgbm và có reranker_lgbm.txt (trong thư mục chỉ mục,
+    nếu không thì models/reranker_lgbm.txt của repo), ngược lại None."""
     try:
         import lightgbm  # noqa: F401
     except ImportError:
         return None
+    model_path = Path(index_dir) / "reranker_lgbm.txt"
+    if not model_path.exists():
+        model_path = REPO_RERANKER
     if not model_path.exists():
         return None
     # Cùng cấu hình với lúc tạo đặc trưng huấn luyện (recommender.rerank.build_features)

@@ -1,9 +1,9 @@
 """
-BƯỚC LÀM PHẲNG TẠM THỜI — chỉ để Người A có input đúng định dạng mà test job MapReduce,
-KHÔNG thay thế cho bước ETL đầy đủ bằng PySpark của Người B (vốn còn phải xử lý
-chuẩn hoá tiêu đề, khử playlist trùng, lọc playlist/bài hiếm...).
+BƯỚC LÀM PHẲNG — tạo input đúng định dạng cho job MapReduce và các mô hình gợi ý.
+Không thay thế bước ETL đầy đủ bằng PySpark (vốn còn phải xử lý chuẩn hoá tiêu đề,
+khử playlist trùng, lọc playlist/bài hiếm...).
 
-Định dạng đầu ra (hợp đồng giữa 2 người, để Người B ETL ra đúng format này cho tuần 2):
+Định dạng đầu ra (bước ETL bằng Spark cũng nên xuất đúng định dạng này):
     Mỗi dòng = một lượt "bài xuất hiện trong playlist", các trường cách nhau bằng TAB:
         pid <TAB> track_uri <TAB> track_name <TAB> artist_name
 

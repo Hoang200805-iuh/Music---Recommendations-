@@ -1,6 +1,7 @@
-# Một image cho cả API (FastAPI) và dashboard (Streamlit); docker-compose.yml chọn lệnh chạy.
-# Chỉ mục app (hdfs_sim/music/analytics/app_index, kể cả mô hình LightGBM) được chép vào image:
-# đọc memory-map qua thư mục chia sẻ từ Windows/macOS vào container rất chậm.
+# Một image cho cả API (FastAPI), dashboard (Streamlit) và bước setup dựng chỉ mục;
+# docker-compose.yml chọn lệnh chạy cho từng service.
+# Chỉ mục không nằm trong image (dựng từ dữ liệu MPD, không được chia sẻ lại): service setup
+# tạo nó trong volume music_data, xem docker/setup.sh.
 FROM python:3.12-slim-bookworm
 
 # LightGBM cần thư viện OpenMP
@@ -17,13 +18,16 @@ WORKDIR /app
 COPY docker/requirements.txt docker/requirements.txt
 RUN pip install --no-cache-dir -r docker/requirements.txt
 
-# Dữ liệu lớn, ít đổi: chép trước code để đổi code không phải chép lại 530MB
-COPY hdfs_sim/music/analytics/app_index hdfs_sim/music/analytics/app_index
 COPY recommender recommender
 COPY api api
 COPY dashboard dashboard
+COPY src src
+COPY models/reranker_lgbm.txt models/reranker_lgbm.txt
+COPY docker/setup.sh docker/setup.sh
 
-RUN useradd --create-home app && mkdir -p /app/als && chown app /app/als
+# Thư mục dữ liệu thuộc user app: volume trống gắn vào đây sẽ nhận quyền này
+RUN useradd --create-home app && mkdir -p /app/hdfs_sim/music /app/als \
+    && chown -R app /app/hdfs_sim /app/als && sed -i 's/\r$//' docker/setup.sh
 USER app
 
 EXPOSE 8000 8501

@@ -168,8 +168,8 @@ def show_recommendations(seed, data, hidden=None, title=None):
         st.html(hybrid_panel(seed, title, data, hidden))
     with bottom_right:
         if data.rerank is None:
-            st.info("Chưa có mô hình LightGBM: cài lightgbm và chép reranker_lgbm.txt (đầu ra của "
-                    "recommender.rerank.train_reranker) vào thư mục chỉ mục, rồi khởi động lại app.")
+            st.info("Chưa có mô hình LightGBM: cài lightgbm (pip install -r requirements.txt) và kiểm tra có file "
+                    "models/reranker_lgbm.txt trong repo, rồi khởi động lại app.")
         else:
             st.html(rerank_panel(seed, title, data, hidden))
     if data.als is not None:

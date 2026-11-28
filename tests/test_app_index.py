@@ -71,3 +71,13 @@ def test_index_keeps_titles_and_artists(tmp_path):
     assert list(data["hybrid"].titles.scores("ROCK")) == [1, 2, 1]
     assert list(data["artists"]) == [0, 1, 2]
     assert data["unseen_artists"] == {-1: 3}
+
+
+def test_reranker_falls_back_to_model_in_repo(tmp_path):
+    import pytest
+
+    pytest.importorskip("lightgbm")
+    # Chỉ mục nhỏ không có reranker_lgbm.txt riêng: dùng models/reranker_lgbm.txt của repo
+    data = _build(tmp_path)
+    assert not (tmp_path / "index" / "reranker_lgbm.txt").exists()
+    assert app_index.REPO_RERANKER.exists() and data["rerank"] is not None

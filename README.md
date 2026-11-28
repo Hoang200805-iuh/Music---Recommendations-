@@ -17,8 +17,9 @@ bundle: [Chạy ALS local](docs/run_als_local.md). Dependency huấn luyện ở
 docker compose up --build
 ```
 
-Giao diện: http://localhost:8501 · API: http://localhost:8000/docs. Cần có chỉ mục app
-(`hdfs_sim/music/analytics/app_index`) trước khi build; chi tiết trong `docs/docker.md`.
+Giao diện: http://localhost:8501 · API: http://localhost:8000/docs. Máy mới clone về: giải nén gói dữ liệu
+của nhóm (4 file trong `hdfs_sim/music/`) vào thư mục gốc repo trước, lần chạy đầu tự dựng chỉ mục trong
+khoảng 10–15 phút. Thêm ALS, chạy không dùng Docker: `docs/docker.md`.
 
 ---
 
@@ -373,101 +374,101 @@ Thời gian và RAM trên laptop 16GB: đánh giá 10.000 playlist mỗi k (3 m�
 
 ---
 
-# Tuần 1 — Người A: Môi trường, dữ liệu, MapReduce
-
-Trạng thái các việc trong plan tuần 1 của Người A:
+# Tuần 1 — Môi trường, dữ liệu, MapReduce
 
 | Việc | Trạng thái | Ghi chú |
 |---|---|---|
-| Cài Hadoop/Spark | ⚠️ Một phần | PySpark cài được qua pip; Hadoop/Docker thật cần chạy ở máy bạn — xem `docs/setup_hadoop_spark_docker.md` |
-| Tải dữ liệu, đếm số file slice | ⚠️ Cần bạn chạy | Mạng ở đây bị chặn tới Kaggle — script đã viết và test xong bằng dữ liệu mẫu, xem `docs/download_dataset.md` |
-| Đọc điều khoản dùng MPD | Xong | `docs/mpd_terms_of_use.md` |
-| Viết job MapReduce (track popularity) | Xong, đã test | `src/mapreduce/` — khớp tuyệt đối với brute-force Python |
+| Cài môi trường | Xong | Python (venv), Docker Desktop. Hadoop/Spark thật chưa cài: job MapReduce chạy ở chế độ mô phỏng local (`docs/setup_hadoop_spark_docker.md` có cách cài Hadoop bằng Docker) |
+| Tải dữ liệu, đếm số file slice | Xong | 788 file slice, đọc được 787 (1 file hỏng), 787.000 playlist — `docs/download_dataset.md` |
+| Đọc điều khoản dùng MPD | Xong | `docs/mpd_terms_of_use.md`: không chia sẻ lại dữ liệu gốc, nên `data/` và `hdfs_sim/` không có trên git |
+| Làm phẳng dữ liệu cho MapReduce | Xong | `src/flatten_for_mapreduce.py` |
+| Job MapReduce đếm độ phổ biến bài hát | Xong, đã kiểm chứng | `src/mapreduce/` — khớp tuyệt đối với cách đếm thuần Python |
+| EDA | Xong | `src/eda_charts.py`, biểu đồ trong `reports/eda_charts/` |
 
-## Vì sao có phần chưa xong hẳn
+## Kết quả trên dữ liệu thật
 
-Sandbox này không có mạng ra ngoài tới `kaggle.com` (bị proxy chặn) và không
-chạy được Docker daemon. Vì vậy:
-- Mọi script đã được **viết xong và kiểm thử bằng dữ liệu mẫu** tự sinh đúng
-  định dạng MPD thật (`src/generate_sample_mpd.py`), để đảm bảo logic đúng.
-- Bạn chỉ cần chạy lại 2-3 lệnh ở máy mình với dữ liệu thật — không phải viết
-  gì thêm.
+- **Dữ liệu:** 788 file `mpd.slice.*.json` (25GB). File `mpd.slice.807000-807999.json` bị hỏng (tải thiếu)
+  nên bị bỏ qua; còn lại 787 file, **787.000 playlist**.
+- **Làm phẳng:** 52.184.832 dòng `pid, bài, tên bài, nghệ sĩ` (mỗi dòng là một lượt bài xuất hiện trong
+  playlist), file 3,9GB.
+- **MapReduce đếm độ phổ biến:** **2.014.098 bài** khác nhau. Bài phổ biến nhất (`reports/top20_tracks.txt`):
 
-## Việc bạn cần làm trên máy mình
+| Hạng | Bài | Nghệ sĩ | Số lượt |
+|---|---|---|---|
+| 1 | HUMBLE. | Kendrick Lamar | 36.543 |
+| 2 | One Dance | Drake | 34.128 |
+| 3 | Broccoli (feat. Lil Yachty) | DRAM | 32.500 |
+| 4 | Closer | The Chainsmokers | 32.419 |
+| 5 | Congratulations | Post Malone | 31.377 |
+
+- Số đếm là **số lượt** bài xuất hiện: playlist lặp lại một bài thì được đếm nhiều lần.
+- Từ tuần 2, job được chạy lại **chỉ trên tập train** để không rò rỉ dữ liệu sang tập đánh giá
+  (`hdfs_sim/music/analytics/track_popularity_train/`).
+
+## Kiểm chứng job MapReduce
+
+Trước khi chạy trên dữ liệu thật, các script được kiểm thử bằng dữ liệu mẫu tự sinh đúng định dạng MPD
+(`src/generate_sample_mpd.py`, `data/sample/`: 2 slice, 101 playlist):
+
+- **Đối chiếu chéo:** đếm lại bằng `collections.Counter` thuần Python trên cùng dữ liệu, so với kết quả
+  mapper/reducer — khớp tuyệt đối 262/262 bài, không lệch dòng nào. Đây là bước "kiểm tra chéo MapReduce
+  với một cách đếm khác" trong plan; khi có bản Spark có thể đối chiếu thêm lần nữa.
+- Top bài phổ biến đúng với phân phối Zipf đã dùng để sinh mẫu (bài phổ biến nhất có trong khoảng 88/101 playlist).
+- `check_dataset.py` phát hiện đúng khoảng `pid` bị thiếu được cố tình tạo trong dữ liệu mẫu (49 → 51),
+  nghĩa là cảnh báo thiếu file hoạt động đúng.
+
+## Cách chạy lại
 
 ```bash
-# 1. Tải dữ liệu thật (xem docs/download_dataset.md nếu cần chi tiết)
+# 1. Tải dữ liệu (chi tiết: docs/download_dataset.md)
 pip install kaggle
 kaggle datasets download -d himanshuwagh/spotify-million -p data/raw --unzip
 
-# 2. Đếm/kiểm tra dữ liệu — lưu output này cho báo cáo
-cd src
-python3 check_dataset.py --data-dir ../data/raw --sample-check 10 | tee ../reports/check_dataset_report.txt
+# 2. Đếm, kiểm tra dữ liệu
+python src/check_dataset.py --data-dir data/raw --sample-check 10 | tee reports/check_dataset_report.txt
 
-# 3. Làm phẳng tạm (để có input cho job MapReduce)
-python3 flatten_for_mapreduce.py --in ../data/raw --out ../hdfs_sim/music/processed/playlist_tracks_flat.tsv
+# 3. Làm phẳng (input cho job MapReduce)
+python src/flatten_for_mapreduce.py --in data/raw --out hdfs_sim/music/processed/playlist_tracks_flat.tsv
 
-# 4. Chạy job MapReduce (mặc định mô phỏng local, không cần Hadoop thật)
-cd mapreduce
-./run_popularity_job.sh
+# 4. Chạy job MapReduce (mặc định mô phỏng local: mapper | sort | reducer, không cần Hadoop)
+cd src/mapreduce && ./run_popularity_job.sh
 ```
 
-Nếu muốn chạy "Hadoop thật" (không bắt buộc, cộng điểm nếu giảng viên yêu cầu):
-xem `docs/setup_hadoop_spark_docker.md` rồi chạy lại bước 4 với `USE_HADOOP=1`.
+Chạy trên Hadoop thật (không bắt buộc): cài theo `docs/setup_hadoop_spark_docker.md` rồi chạy bước 4 với
+`USE_HADOOP=1`.
 
-## Cấu trúc đã tạo
+## Cấu trúc thư mục
 
 ```
-music-rec/
 ├── data/
-│   ├── raw/              # (trống) — bạn tải dữ liệu thật vào đây
+│   ├── raw/               # dữ liệu MPD tải về (không có trên git)
 │   ├── sample/            # dữ liệu mẫu để test (2 slice, 101 playlist, KHÔNG phải dữ liệu thật)
-│   └── parquet/           # (dành cho tuần 2, Người B)
-├── docs/
-│   ├── mpd_terms_of_use.md
-│   ├── download_dataset.md
-│   └── setup_hadoop_spark_docker.md
-├── hdfs_sim/music/        # mô phỏng cấu trúc HDFS bằng thư mục local
-│   ├── raw/spotify/
-│   ├── processed/{playlists,tracks,playlist_tracks}/
-│   ├── analytics/track_popularity/   <- kết quả job MapReduce
-│   ├── models/
-│   └── recommendations/
+│   └── parquet/           # dành cho bước tiền xử lý bằng Spark
+├── docs/                  # điều khoản MPD, tải dữ liệu, cài Hadoop/Spark, API, Docker
+├── hdfs_sim/music/        # mô phỏng cấu trúc HDFS bằng thư mục local (không có trên git)
+│   ├── processed/         # file làm phẳng, file chia tập, tên playlist
+│   └── analytics/         # kết quả MapReduce, chỉ mục app, đặc trưng LightGBM
 ├── src/
 │   ├── generate_sample_mpd.py        # sinh dữ liệu mẫu để test
-│   ├── check_dataset.py              # đếm/kiểm tra dữ liệu (việc 2-3 tuần 1)
-│   ├── flatten_for_mapreduce.py      # làm phẳng tạm, input cho MapReduce
-│   └── mapreduce/
-│       ├── mapper.py
-│       ├── reducer.py
-│       └── run_popularity_job.sh     # mô phỏng local HOẶC chạy Hadoop thật
-└── reports/figures/        # (dành cho EDA ở tuần 1-2)
+│   ├── check_dataset.py              # đếm, kiểm tra dữ liệu
+│   ├── flatten_for_mapreduce.py      # làm phẳng, input cho MapReduce
+│   ├── eda_charts.py                 # biểu đồ EDA
+│   ├── benchmark_build.py            # thí nghiệm hiệu năng xây bảng mô hình
+│   └── mapreduce/                    # mapper.py, reducer.py, run_popularity_job.sh
+├── recommender/           # các mô hình gợi ý, đánh giá, chỉ mục app (tuần 2)
+├── api/                   # FastAPI
+├── dashboard/             # giao diện Streamlit
+└── reports/               # kết quả đánh giá, thí nghiệm, biểu đồ
 ```
 
-## Kết quả đã kiểm chứng (trên dữ liệu mẫu)
+## Định dạng dữ liệu đầu vào
 
-- Job chạy ra top bài phổ biến nhất đúng theo phân phối Zipf đã sinh trong dữ
-  liệu mẫu (kiểm tra bằng mắt: track phổ biến nhất xuất hiện trong ~88/101
-  playlist, đúng như kỳ vọng vì nó được set trọng số cao nhất lúc sinh mẫu).
-- **Đối chiếu chéo:** đếm lại bằng `collections.Counter` thuần Python trên
-  cùng dữ liệu, so với kết quả mapper/reducer — khớp tuyệt đối 262/262
-  track_uri, không lệch dòng nào. Đây chính là bước "kiểm tra chéo MapReduce
-  vs Spark" nêu trong plan (ở đây đối chiếu với Python trước; khi Người B có
-  bản Spark ở tuần 3, đối chiếu thêm lần nữa).
-- Script `check_dataset.py` đã tự phát hiện đúng một khoảng `pid` bị thiếu mà
-  mình cố tình để trong dữ liệu mẫu (49 → 51), nghĩa là cảnh báo thiếu file
-  hoạt động đúng.
-
-## Việc cần phối hợp với Người B
-
-Định dạng input cho job MapReduce (đã ghi trong docstring của
-`flatten_for_mapreduce.py`):
+Định dạng input cho job MapReduce (đã ghi trong docstring của `flatten_for_mapreduce.py`):
 
 ```
 pid <TAB> track_uri <TAB> track_name <TAB> artist_name
 ```
 
-Ở tuần 2, khi Người B có bảng Parquet `playlist_tracks` + `tracks` thật, chỉ
-cần export ra đúng 4 cột này (dạng TSV hoặc đổi mapper đọc trực tiếp từ
-Parquet) là job MapReduce ở đây chạy được luôn trên dữ liệu thật, không cần
-sửa `mapper.py`/`reducer.py`.
+Nếu bước tiền xử lý bằng Spark xuất bảng Parquet `playlist_tracks` + `tracks` ra đúng 4 cột này (dạng TSV,
+hoặc đổi mapper đọc trực tiếp từ Parquet), job MapReduce chạy được luôn mà không cần sửa
+`mapper.py`/`reducer.py`.
