@@ -1,0 +1,6 @@
+models/als_local/**/*.npy filter=lfs diff=lfs merge=lfs -text
+models/als_local/**/*.npz filter=lfs diff=lfs merge=lfs -text
+models/als_local/**/*.tsv filter=lfs diff=lfs merge=lfs -text
+models/als_local/**/*.txt filter=lfs diff=lfs merge=lfs -text
+hdfs_sim/music/analytics/als/** filter=lfs diff=lfs merge=lfs -text
+hdfs_sim/music/analytics/app_index/** filter=lfs diff=lfs merge=lfs -text
